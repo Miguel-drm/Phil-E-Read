@@ -10,36 +10,34 @@ The project is organized to support multiple dashboard types (Teacher, Parent, A
 src/
 ├── components/
 │   ├── layout/                 # Reusable layout components
-│   │   ├── DashboardLayout.tsx # Main dashboard layout wrapper
-│   │   ├── Header.tsx         # Dashboard header with search and navigation
-│   │   └── Sidebar.tsx        # Navigation sidebar (supports different user types)
-│   ├── dashboard/
-│   │   └── teacher/           # Teacher-specific dashboard components
-│   │       ├── StatsCards.tsx # Statistics cards component
-│   │       ├── PerformanceChart.tsx # ECharts performance visualization
-│   │       └── UpcomingSessions.tsx # Upcoming sessions widget
-│   └── common/                # Shared components (future use)
-├── pages/
-│   └── TeacherDashboard.tsx   # Main teacher dashboard page
-├── types/                     # TypeScript type definitions (future use)
-├── hooks/                     # Custom React hooks (future use)
-├── utils/                     # Utility functions (future use)
-└── App.tsx                    # Main app component (router)
+│   ├── dashboard/              # Dashboard-specific components
+│   │   ├── teacher/           # Teacher dashboard components
+│   │   ├── parent/            # Parent dashboard components
+│   │   └── admin/             # Admin dashboard components
+│   └── auth/                  # Authentication components
+├── pages/                     # Page components
+├── services/                  # API and service integrations
+├── contexts/                  # React context providers
+├── config/                    # Configuration files
+├── assets/                    # Static assets
+└── App.tsx                    # Main app component
 ```
 
 ## Features
 
 ### Current Implementation
-- **Teacher Dashboard**: Complete dashboard with statistics, performance charts, and session management
+- **Authentication System**: User authentication and authorization
+- **Teacher Dashboard**: Student performance tracking and management
+- **Parent Dashboard**: Student progress monitoring
+- **Admin Dashboard**: School-wide analytics and management
 - **Responsive Design**: Mobile-friendly layout using Tailwind CSS
-- **Interactive Charts**: ECharts integration for performance visualization
-- **Modular Architecture**: Reusable components for future dashboard types
+- **Modular Architecture**: Reusable components across different dashboard types
 
 ### Planned Features
-- **Parent Dashboard**: Student progress tracking and communication
-- **Admin Dashboard**: School-wide analytics and user management
-- **Authentication**: User role-based access control
 - **Real-time Updates**: Live data synchronization
+- **Advanced Analytics**: Enhanced data visualization and reporting
+- **Communication Tools**: Integrated messaging system
+- **Assessment Tools**: Enhanced reading assessment capabilities
 
 ## Dashboard Types
 
@@ -50,13 +48,13 @@ src/
 - Class list management
 - Data export capabilities
 
-### Parent Dashboard (Future)
+### Parent Dashboard
 - Child's reading progress
 - Assignment tracking
 - Communication with teachers
 - Progress reports
 
-### Admin Dashboard (Future)
+### Admin Dashboard
 - School-wide analytics
 - Teacher management
 - Student enrollment
@@ -66,8 +64,8 @@ src/
 
 - **React 18** with TypeScript
 - **Tailwind CSS** for styling
-- **ECharts** for data visualization
 - **Vite** for build tooling
+- **Context API** for state management
 
 ## Getting Started
 
@@ -88,12 +86,14 @@ src/
 The dashboard uses a modular approach where:
 
 - **Layout Components** (`src/components/layout/`) provide the structure
-- **Dashboard Components** (`src/components/dashboard/`) contain specific functionality
+- **Dashboard Components** (`src/components/dashboard/`) contain specific functionality for each user type
+- **Auth Components** (`src/components/auth/`) handle authentication and authorization
+- **Services** (`src/services/`) manage API integrations and data handling
+- **Contexts** (`src/contexts/`) provide global state management
 - **Pages** (`src/pages/`) compose components into complete views
-- **App.tsx** acts as a simple router (can be extended with React Router)
 
-This structure makes it easy to:
-- Add new dashboard types (Parent, Admin)
-- Reuse components across different views
-- Maintain separation of concerns
-- Scale the application as it grows
+This structure enables:
+- Clear separation of concerns
+- Easy addition of new features
+- Reusable components across different views
+- Scalable architecture for future growth
