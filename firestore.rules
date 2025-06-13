@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to get user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return getUserRole() == 'admin';
+    }
+    
+    // Helper function to check if user is teacher
+    function isTeacher() {
+      return getUserRole() == 'teacher';
+    }
+    
+    // Helper function to check if user is parent
+    function isParent() {
+      return getUserRole() == 'parent';
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      // Allow users to read their own data
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow admin to read all user data
+      allow read: if request.auth != null && isAdmin();
+      
+      // Allow users to create their own document
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow admin to update any user's role
+      allow update: if request.auth != null && isAdmin();
+      
+      // Allow users to update their own data (except role)
+      allow update: if request.auth != null && request.auth.uid == userId 
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+    }
+    
+    // Class Grades collection rules
+    match /classGrades/{gradeId} {
+      // Allow teachers and admin to read all grades
+      allow read: if request.auth != null && (isTeacher() || isAdmin());
+      
+      // Allow parents to read grades of their children
+      allow read: if request.auth != null && isParent() 
+        && resource.data.studentId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.children;
+      
+      // Allow teachers to create grades
+      allow create: if request.auth != null && isTeacher();
+      
+      // Allow teachers to update their own grades
+      allow update: if request.auth != null && isTeacher() 
+        && resource.data.teacherId == request.auth.uid;
+      
+      // Allow admin to update any grade
+      allow update: if request.auth != null && isAdmin();
+      
+      // Allow teachers to delete their own grades
+      allow delete: if request.auth != null && isTeacher() 
+        && resource.data.teacherId == request.auth.uid;
+      
+      // Allow admin to delete any grade
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    // Students collection rules
+    match /students/{studentId} {
+      // Allow teachers and admin to read all students
+      allow read: if request.auth != null && (isTeacher() || isAdmin());
+      
+      // Allow parents to read their children's data
+      allow read: if request.auth != null && isParent() 
+        && studentId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.children;
+      
+      // Allow teachers to create students
+      allow create: if request.auth != null && isTeacher();
+      
+      // Allow admin to create students
+      allow create: if request.auth != null && isAdmin();
+      
+      // Allow teachers to update students
+      allow update: if request.auth != null && isTeacher();
+      
+      // Allow admin to update students
+      allow update: if request.auth != null && isAdmin();
+      
+      // Allow admin to delete students
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    // Default rule - deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 
