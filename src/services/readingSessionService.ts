@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 export type ReadingSession = {
+  pdfPublicId: any;
   id?: string;
   title: string;
   book: string;
@@ -22,8 +23,8 @@ export type ReadingSession = {
   status: 'pending' | 'in-progress' | 'completed';
   teacherId: string;
   createdAt?: Date;
-  completedAt?: Date;
-  currentWordIndex?: number;
+  completedAt?: Date;  currentWordIndex?: number;
+  storyUrl: string;
 };
 
 export const readingSessionService = {
@@ -124,5 +125,17 @@ export const readingSessionService = {
       console.error('Error updating current word index:', error);
       throw error;
     }
+  },
+
+  async getReadingSession(id: string): Promise<ReadingSession> {
+    return this.getSessionById(id).then(session => {
+      if (!session) {
+        throw new Error('Session not found');
+      }
+      if (!session.pdfPublicId) {
+        throw new Error('Session data missing PDF information');
+      }
+      return session;
+    });
   },
 };

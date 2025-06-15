@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
+
+/* PDF Viewer styles */
+.pdf-container {
+  @apply flex flex-col items-center min-h-[600px] w-full;
+}
+
+.react-pdf__Document {
+  @apply w-full flex flex-col items-center;
+}
+
+.react-pdf__Page {
+  @apply max-w-full;
+}
+
+.react-pdf__Page canvas {
+  @apply max-w-full h-auto !important;
+}
+
+.react-pdf__Page__textContent {
+  @apply select-text;
+}
+
+.react-pdf__Page__annotations {
+  @apply hidden;
+}

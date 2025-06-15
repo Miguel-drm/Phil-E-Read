@@ -1,226 +1,185 @@
-import React, { useState, useEffect } from 'react';
+import React, {useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { readingSessionService, type ReadingSession } from '../../services/readingSessionService';
-import Swal from 'sweetalert2';
-import {
-  MicrophoneIcon,
-  StopIcon,
-  ArrowLeftIcon,
-  BookOpenIcon,
-  UserGroupIcon,
-  ClockIcon,
-  ChartBarIcon,
-  PencilIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  PauseIcon,
-  PlayIcon
-} from '@heroicons/react/24/outline';
+import * as pdfjsLib from 'pdfjs-dist';
+import { ArrowLeftIcon, XCircleIcon, BookOpenIcon, UserGroupIcon, ClockIcon, ChartBarIcon, MicrophoneIcon, PlayIcon, PauseIcon, StopIcon } from '@heroicons/react/24/outline';
+
+// Configure the PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const ReadingSessionPage: React.FC = () => {
+  const [pdfText, setPdfText] = useState<string>('');
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [currentSession, setCurrentSession] = useState<ReadingSession | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const [currentWordIndex, setCurrentWordIndex] = useState<number>(0);
+  const [words, setWords] = useState<string[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [storyContent, setStoryContent] = useState<string>('');
-  const [words, setWords] = useState<string[]>([]);
-  const [currentWordIndex, setCurrentWordIndex] = useState<number>(0);
-  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
-  const [transcript, setTranscript] = useState<string>('');
-  const [isMicGranted, setIsMicGranted] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      if (sessionId) {
-        try {
-          const session = await readingSessionService.getSessionById(sessionId);
-          if (session) {
-            setCurrentSession(session);
-            // Placeholder for story content - replace with actual story fetching
-            const dummyStory = "The quick brown fox jumps over the lazy dog. This is a placeholder for the actual story content that will be loaded from a service in the future. Each word will be tracked for karaoke-style reading.";
-            setStoryContent(dummyStory);
-            setWords(dummyStory.split(/\s+/)); // Split by whitespace to get words
-            setCurrentWordIndex(session.currentWordIndex || 0);
-          } else {
-            Swal.fire('Error', 'Session not found.', 'error');
-            navigate('/teacher/reading');
-          }
-        } catch (error) {
-          console.error('Error fetching session:', error);
-          Swal.fire('Error', 'Failed to load session details.', 'error');
-          navigate('/teacher/reading');
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-    fetchSession();
-  }, [sessionId, navigate]);
-
-  // Timer effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording && !isPaused) {
-      interval = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording, isPaused]);
-
-  // Speech Recognition effect
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true; // Get interim results to show words as they are being spoken
-      rec.lang = 'en-US';
-
-      rec.onresult = (event: SpeechRecognitionEvent) => {
-        let newTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            newTranscript += event.results[i][0].transcript;
-          } else {
-            // For interim results, we might want to display them differently or use them for real-time tracking
-            // For now, let's just append to the transcript
-            newTranscript += event.results[i][0].transcript;
-          }
-        }
-        setTranscript(newTranscript.toLowerCase());
-        console.log('Raw Transcript:', newTranscript); // Log raw transcript
-        console.log('Processed Transcript:', newTranscript.toLowerCase()); // Log processed transcript
-
-        // Simple word tracking logic
-        const spokenWords = newTranscript.toLowerCase().split(' ').filter(word => word.length > 0);
-        console.log('Spoken Words Array:', spokenWords); // Log spoken words array
-        if (spokenWords.length > 0) {
-          let matchedIndex = -1;
-          for (let i = 0; i < spokenWords.length; i++) {
-            const spokenWord = spokenWords[i].replace(/[.,!?;:]/g, ''); // Remove punctuation
-            const storyWord = words[currentWordIndex + i]?.toLowerCase().replace(/[.,!?;:]/g, '');
-
-            console.log(`Comparing: Spoken='${spokenWord}', Story='${storyWord}'`); // Log comparison
-
-            if (storyWord && spokenWord === storyWord) {
-              matchedIndex = currentWordIndex + i;
-              console.log('Match Found at index:', matchedIndex); // Log match
-            } else {
-              console.log('Mismatch or no story word.'); // Log mismatch
-              break; // Stop if mismatch
-            }
-          }
-          if (matchedIndex !== -1 && matchedIndex + 1 > currentWordIndex) {
-            const nextWordIndex = matchedIndex + 1;
-            setCurrentWordIndex(nextWordIndex);
-            console.log('Updating currentWordIndex to:', nextWordIndex); // Log index update
-            // Update Firebase with the new word index
-            if (currentSession?.id) {
-              readingSessionService.updateCurrentWordIndex(currentSession.id, nextWordIndex).catch(console.error);
-            }
-          }
-        }
-      };
-
-      rec.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          setIsMicGranted(false);
-          Swal.fire('Microphone Access Denied', 'Please allow microphone access to use recording features.', 'warning');
-        }
-      };
-
-      rec.onend = () => {
-        if (isRecording && !isPaused) {
-          // If recording was active and not paused, restart recognition (continuous)
-          rec.start();
-        }
-      };
-
-      setRecognition(rec);
-
-      // Check microphone permission status
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(() => setIsMicGranted(true))
-        .catch(() => setIsMicGranted(false));
-
-    } else {
-      Swal.fire('Browser Not Supported', 'Speech recognition is not supported in this browser. Please use Chrome or Edge.', 'error');
-      setIsMicGranted(false);
-    }
-    return () => {
-      if (recognition) {
-        recognition.stop();
-      }
-    };
-  }, [currentWordIndex, words, isRecording, isPaused, currentSession?.id]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const handleStartRecording = () => {
     setIsRecording(true);
     setIsPaused(false);
-    setElapsedTime(0);
-    setCurrentWordIndex(0);
-    if (recognition) {
-      recognition.start();
-    }
-    // TODO: Implement actual recording functionality
-  };
-
-  const handleStopRecording = () => {
-    setIsRecording(false);
-    setIsPaused(false);
-    setElapsedTime(0);
-    setCurrentWordIndex(0);
-    if (recognition) {
-      recognition.stop();
-    }
-    // TODO: Implement stop recording functionality
   };
 
   const handlePauseRecording = () => {
     setIsPaused(true);
-    if (recognition) {
-      recognition.stop();
-    }
-    // TODO: Implement pause recording functionality
   };
 
   const handleResumeRecording = () => {
     setIsPaused(false);
-    if (recognition) {
-      recognition.start();
-    }
-    // TODO: Implement resume recording functionality
   };
 
-  const handleCompleteSession = async () => {
-    if (!currentSession?.id) return;
-    try {
-      await readingSessionService.updateSessionStatus(currentSession.id, 'completed');
-      setCurrentSession(prev => prev ? { ...prev, status: 'completed' } : null);
-      if (isRecording) {
-        handleStopRecording();
+  useEffect(() => {
+    const fetchSession = async () => {
+      if (!sessionId) {
+        console.error('No session ID provided');
+        return;
       }
-      Swal.fire('Success', 'Session marked as completed.', 'success');
-    } catch (error) {
-      console.error('Error completing session:', error);
-      Swal.fire('Error', 'Failed to complete session.', 'error');
-    }
-  };
+
+      try {
+        setIsLoading(true);
+        console.log('Fetching session with ID:', sessionId);
+
+        const sessionData = await readingSessionService.getSessionById(sessionId);
+        console.log('Session data:', sessionData);
+
+        if (!sessionData) {
+          throw new Error('Session not found');
+        }
+
+        setCurrentSession(sessionData);
+
+        // Use the storyUrl directly from the session data
+        if (sessionData.storyUrl) {
+          await loadPdfText(sessionData.storyUrl);
+        } else {
+          throw new Error('Session has no PDF file associated');
+        }
+      } catch (error: any) {
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+        });
+        setPdfError(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSession();
+  }, [sessionId]);
+
+  // Initialize PDF.js
+  useEffect(() => {
+    const setupPdfjs = async () => {
+      try {
+        // Import worker from CDN
+        pdfjsLib.GlobalWorkerOptions.workerSrc = await import('pdfjs-dist/build/pdf.worker.entry');
+      } catch (error) {
+        console.error('Failed to initialize PDF.js worker:', error);
+      }
+    };
+    setupPdfjs();
+  }, []);
+
+
 
   const handleGoBack = () => {
     navigate(-1);
   };
+
+  const renderPdfContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+        </div>
+      );
+    }
+
+    if (pdfError) {
+      return (
+        <div className="text-center p-8">
+          <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <div className="text-red-600 mb-4">{pdfError}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (!pdfText) {
+      return (
+        <div className="text-center text-gray-600 p-8">
+          <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p>No PDF content available</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="pdf-container">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="prose max-w-none">
+            <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
+              {pdfText}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const loadPdfText = async (url: string) => {
+    try {
+      console.log('Loading PDF from URL:', url);
+      const loadingTask = pdfjsLib.getDocument(url);
+      const pdf = await loadingTask.promise;
+      console.log('PDF loaded successfully, pages:', pdf.numPages);
+      let fullText = '';
+      
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        console.log('Processing page', pageNum);
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const strings = content.items.map((item: any) => item.str);
+        fullText += strings.join(' ') + '\n\n';
+      }
+      
+      console.log('Text extracted successfully, length:', fullText.length);
+      setPdfText(fullText);
+      const wordArray = fullText.split(/\s+/).filter(word => word.length > 0);
+      setWords(wordArray);
+    } catch (error) {
+      console.error('Error loading PDF:', error);
+      console.error('Full error object:', error);
+      setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
+    }
+  };
+
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording && !isPaused) {
+      interval = setInterval(() => {
+        setElapsedTime((prev: number) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isRecording, isPaused]);
 
   if (isLoading) {
     return (
@@ -234,7 +193,70 @@ const ReadingSessionPage: React.FC = () => {
   }
 
   if (!currentSession) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+          </div>
+        ) : !currentSession ? (
+          <div className="flex flex-col items-center justify-center h-screen">
+            <p className="text-red-600">Failed to load reading session</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const handleCompleteSession = async () => {
+    if (!sessionId || !currentSession) return;
+
+    try {
+      await readingSessionService.updateSessionStatus(sessionId, 'completed');
+      setCurrentSession({
+        ...currentSession,
+        status: 'completed'
+      });
+    } catch (error) {
+      console.error('Failed to complete session:', error);
+      // Could add toast notification here for error feedback
+    }
+  };
+  const handleStopRecording = async () => {
+    try {
+      // Stop any active recording - should be implemented in a recording service or context
+      // Example: await recordingService.stop();
+
+      // Save the recording data with the session
+      if (sessionId) {
+        // Example: await readingSessionService.saveRecording(sessionId, recordingData);
+
+        // Update session status if needed
+        await readingSessionService.updateSessionStatus(sessionId, 'completed');
+
+        // Update local state
+        if (currentSession) {
+          setCurrentSession({
+            ...currentSession,
+            status: 'completed'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      // Could add error handling UI feedback here
+    }
+  };
+  function formatTime(elapsedTime: number): string {
+    const minutes = Math.floor(elapsedTime / 60);
+    const seconds = elapsedTime % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
   return (
@@ -252,13 +274,12 @@ const ReadingSessionPage: React.FC = () => {
                 Back to Sessions
               </button>
               <div className="flex items-center space-x-2">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  currentSession.status === 'completed' 
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${currentSession.status === 'completed'
                     ? 'bg-green-100 text-green-800'
                     : currentSession.status === 'in-progress'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-yellow-100 text-yellow-800'
-                }`}>
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
                   {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
                 </span>
                 {currentSession.status === 'in-progress' && (
@@ -274,7 +295,7 @@ const ReadingSessionPage: React.FC = () => {
                   onClick={handleCompleteSession}
                   className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
                 >
-                  <CheckCircleIcon className="h-5 w-5 mr-2" />
+                  {/* <CheckCircleIcon className="h-5 w-5 mr-2" /> */}
                   Complete Session
                 </button>
               )}
@@ -299,7 +320,7 @@ const ReadingSessionPage: React.FC = () => {
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Students</h3>
                 <div className="mt-1 flex flex-wrap gap-2">
-                  {currentSession.students.map((student, index) => (
+                  {currentSession.students.map((student: string, index: number) => (
                     <span
                       key={index}
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
@@ -337,26 +358,15 @@ const ReadingSessionPage: React.FC = () => {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Story Text Panel */}
-          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="lg:col-span-3 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
             <div className="p-6">
-              <div className="prose prose-2xl max-w-full">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">Story Content</h3>
-                <div className="space-y-4">
-                  <p className="text-3xl text-gray-700 leading-relaxed">
-                    {words.map((word, index) => (
-                      <span
-                        key={index}
-                        className={`inline-block border border-transparent rounded px-1 py-0.5 m-0.5 transition-all duration-150 ease-in-out
-                           ${
-                             index === currentWordIndex
-                               ? 'bg-blue-200 text-blue-800 font-bold border-blue-400 transform scale-105'
-                               : 'text-gray-700 hover:bg-gray-100 hover:border-gray-300'
-                           }`}
-                      >
-                        {word}
-                      </span>
-                    ))}
-                  </p>
+              <div className="max-w-full">
+                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                  <BookOpenIcon className="h-6 w-6 text-blue-600 mr-2" />
+                  Story Content
+                </h3>
+                <div className="pdf-viewer-container">
+                  {renderPdfContent()}
                 </div>
               </div>
             </div>
@@ -437,4 +447,5 @@ const ReadingSessionPage: React.FC = () => {
   );
 };
 
-export default ReadingSessionPage; 
+export default ReadingSessionPage;
+
