@@ -11,7 +11,8 @@ import {
   orderBy,
   Timestamp,
   serverTimestamp,
-  collectionGroup
+  collectionGroup,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
@@ -150,10 +151,38 @@ class GradeService {
     }
   }
 
-  // Delete a class grade
+  // Delete a class grade (with subcollection cleanup, batched, and debug log)
   async deleteGrade(gradeId: string): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, gradeId);
+      // DEBUG: List all subcollections under the grade
+      if (typeof (docRef as any).listCollections === 'function') {
+        const subcollections = await (docRef as any).listCollections();
+        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
+      } else if (typeof (db as any).listCollections === 'function') {
+        // Fallback for some Firestore SDKs
+        const subcollections = await (db as any).listCollections(docRef);
+        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
+      } else {
+        console.warn('listCollections is not available in this Firestore SDK.');
+      }
+      // Delete all students in the subcollection in batches
+      const studentsRef = collection(docRef, this.studentsSubcollection);
+      let studentsSnap = await getDocs(studentsRef);
+      const BATCH_SIZE = 400;
+      while (!studentsSnap.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        studentsSnap.forEach((studentDoc) => {
+          if (count < BATCH_SIZE) {
+            batch.delete(studentDoc.ref);
+            count++;
+          }
+        });
+        await batch.commit();
+        studentsSnap = await getDocs(studentsRef);
+      }
+      // Now delete the grade document
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting grade:', error);

@@ -29,6 +29,7 @@ const ClassList: React.FC = () => {
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [isCreateGradeModalOpen, setIsCreateGradeModalOpen] = useState(false);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [deletingGradeId, setDeletingGradeId] = useState<string | null>(null);
 
   // Load students on component mount
   useEffect(() => {
@@ -68,7 +69,20 @@ const ClassList: React.FC = () => {
   };
 
   const filterStudents = () => {
-    let filtered = [...students];
+    // Only show students if a class is selected
+    if (!selectedGrade || selectedGrade === 'all') {
+      setFilteredStudents([]);
+      return;
+    }
+    // Get the selected grade object
+    const gradeObj = grades.find(g => g.id === selectedGrade);
+    if (!gradeObj) {
+      setFilteredStudents([]);
+      return;
+    }
+    // Use the last loaded studentsInGrade from handleGradeSelect if available
+    // Otherwise, fallback to filtering by grade name (for safety)
+    let filtered = filteredStudents.length > 0 ? [...filteredStudents] : students.filter(student => String(student.grade) === gradeObj.name);
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(student => {
@@ -83,12 +97,18 @@ const ClassList: React.FC = () => {
     }
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'name':
+        case 'name-asc':
           return a.name.localeCompare(b.name);
-        case 'readingLevel':
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'readingLevel-desc':
           return b.readingLevel - a.readingLevel;
-        case 'attendance':
+        case 'readingLevel-asc':
+          return a.readingLevel - b.readingLevel;
+        case 'attendance-desc':
           return b.attendance - a.attendance;
+        case 'attendance-asc':
+          return a.attendance - b.attendance;
         case 'performance':
           return a.performance.localeCompare(b.performance);
         default:
@@ -166,13 +186,44 @@ const ClassList: React.FC = () => {
 
   const handleImportStudents = async () => {
     if (!currentUser?.uid) return;
-
-    await studentService.importStudents(importedStudents, currentUser.uid);
-    
+    if (!selectedGrade || selectedGrade === 'all') {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'No Class Selected',
+        text: 'Please select a class before importing students.'
+      });
+      return;
+    }
+    // Get the selected grade object
+    const gradeObj = grades.find(g => g.id === selectedGrade);
+    if (!gradeObj) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Invalid Class',
+        text: 'The selected class could not be found.'
+      });
+      return;
+    }
+    // Import students to main collection and add to selected class subcollection
+    await studentService.importStudents(
+      importedStudents.map(s => ({ ...s, grade: gradeObj.name })),
+      currentUser.uid
+    );
+    // Add each imported student to the selected class subcollection
+    // (Find the student in the main collection by name and grade)
+    const allStudents = await studentService.getStudents(currentUser.uid);
+    for (const imported of importedStudents) {
+      const match = allStudents.find(s => s.name === imported.name && String(s.grade) === String(gradeObj.name));
+      if (match && match.id) {
+        await gradeService.addStudentToGrade(selectedGrade, {
+          studentId: match.id,
+          name: match.name
+        });
+      }
+    }
     // Reload students and statistics
     await loadStudents();
     await loadClassStatistics();
-    
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -220,7 +271,33 @@ const ClassList: React.FC = () => {
   };
 
   const handleDeleteAllStudents = async () => {
-    // No need to call showInfo here, as it's not used in the new implementation
+    const result = await showConfirmation(
+      'Delete All Students',
+      'Are you sure you want to delete ALL students? This action cannot be undone.',
+      'Delete',
+      'Cancel',
+      'warning'
+    );
+    if (result.isConfirmed) {
+      try {
+        const ids = students.map(s => s.id).filter((id): id is string => Boolean(id));
+        if (ids.length > 0) {
+          await studentService.batchDeleteStudents(ids);
+        }
+        await loadGrades();
+        await Swal.fire({
+          icon: 'success',
+          title: 'Deleted!',
+          text: 'All students in the table have been deleted.',
+          timer: 1800,
+          showConfirmButton: false
+        });
+        await loadStudents();
+        await loadClassStatistics();
+      } catch (error) {
+        showError('Failed to Delete', 'An error occurred while deleting students.');
+      }
+    }
   };
 
   const handleDeleteStudent = async (studentId: string, studentName: string) => {
@@ -236,6 +313,7 @@ const ClassList: React.FC = () => {
         await studentService.deleteStudent(studentId);
         showSuccess('Student Removed', `${studentName} has been removed from the class.`);
         await loadStudents();
+        await loadGrades();
         await loadClassStatistics();
       } catch (error) {
         showError('Failed to Remove', 'An error occurred while removing the student.');
@@ -267,16 +345,22 @@ const ClassList: React.FC = () => {
       console.log('Starting to load grades...');
       const gradesData = await gradeService.getActiveGrades();
       console.log('Grades loaded successfully:', gradesData);
-      
+      // Get all students for the teacher
+      let allStudents: Student[] = students;
+      if (!allStudents.length && currentUser?.uid) {
+        allStudents = await studentService.getStudents(currentUser.uid);
+      }
       // Get student counts for each grade
       const gradesWithCounts = await Promise.all(gradesData.map(async (grade) => {
         try {
           if (grade.id) {
             const studentsInGrade = await gradeService.getStudentsInGrade(grade.id);
-            console.log(`Found ${studentsInGrade.length} students in grade ${grade.name}`);
+            // Only count students that exist in the main students collection
+            const validStudentIds = allStudents.map(s => s.id);
+            const filteredStudents = studentsInGrade.filter(sg => validStudentIds.includes(sg.studentId));
             return {
               ...grade,
-              studentCount: studentsInGrade.length
+              studentCount: filteredStudents.length
             };
           }
           return grade;
@@ -288,10 +372,8 @@ const ClassList: React.FC = () => {
           };
         }
       }));
-      
       console.log('Grades with counts:', gradesWithCounts);
       setGrades(gradesWithCounts);
-      
       if (gradesWithCounts.length === 0) {
         console.log('No grades found in database');
       }
@@ -390,19 +472,20 @@ const ClassList: React.FC = () => {
   // Handle grade selection
   const handleGradeSelect = async (gradeId: string) => {
     if (selectedGrade === gradeId) {
-      setSelectedGrade('all');
-      setFilteredStudents(students);
-    } else {
-      setSelectedGrade(gradeId);
-      try {
-        const studentsInGrade = await gradeService.getStudentsInGrade(gradeId);
-        const studentIds = studentsInGrade.map(s => s.studentId);
-        const gradeStudents = students.filter(student => studentIds.includes(student.id || ''));
-        setFilteredStudents(gradeStudents);
-      } catch (error) {
-        console.error('Error loading students for grade:', error);
-        showError('Error', 'Failed to load students for this grade');
-      }
+      // Do nothing if the same class is clicked
+      return;
+    }
+    setSelectedGrade(gradeId);
+    try {
+      // Get students in the grade's subcollection
+      const studentsInGrade = await gradeService.getStudentsInGrade(gradeId);
+      const studentIds = studentsInGrade.map(s => s.studentId);
+      // Only show students in the main collection that are also in the grade's subcollection
+      const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
+      setFilteredStudents(gradeStudents);
+    } catch (error) {
+      console.error('Error loading students for grade:', error);
+      showError('Error', 'Failed to load students for this grade');
     }
   };
 
@@ -502,8 +585,9 @@ const ClassList: React.FC = () => {
         await gradeService.deleteGrade(gradeId);
         showSuccess('Grade Deleted', `Grade "${gradeName}" has been deleted.`);
         await loadGrades();
-      } catch (error) {
-        showError('Failed to Delete', 'An error occurred while deleting the grade.');
+      } catch (error: any) {
+        const errorMsg = error && error.message ? error.message : 'An error occurred while deleting the grade.';
+        showError('Failed to Delete', errorMsg);
       }
     }
   };
@@ -516,12 +600,20 @@ const ClassList: React.FC = () => {
         html: `
           <div class="text-left p-4">
             <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Grade Name</label>
-              <input 
-                id="grade-name" 
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                placeholder="e.g., Grade 1"
-              >
+              <label class="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
+              <select id="grade-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Select grade level</option>
+                <option value="Grade 1">Grade 1</option>
+                <option value="Grade 2">Grade 2</option>
+                <option value="Grade 3">Grade 3</option>
+                <option value="Grade 4">Grade 4</option>
+                <option value="Grade 5">Grade 5</option>
+                <option value="Grade 6">Grade 6</option>
+              </select>
+            </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Section</label>
+              <input id="grade-section" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Athena" />
             </div>
             <div class="mb-6">
               <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
@@ -546,16 +638,17 @@ const ClassList: React.FC = () => {
           cancelButton: 'bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md border border-gray-300'
         },
         preConfirm: () => {
-          const name = (document.getElementById('grade-name') as HTMLInputElement).value;
+          const gradeLevel = (document.getElementById('grade-level') as HTMLSelectElement).value;
+          const section = (document.getElementById('grade-section') as HTMLInputElement).value.trim();
           const description = (document.getElementById('grade-description') as HTMLTextAreaElement).value;
 
-          if (!name || !description) {
+          if (!gradeLevel || !section || !description) {
             Swal.showValidationMessage('Please fill in all required fields');
             return false;
           }
 
           return { 
-            name, 
+            name: `${gradeLevel} - ${section}`,
             description,
             ageRange: "6-12 years", // Default age range
             color: "blue" // Default color
@@ -639,6 +732,25 @@ const ClassList: React.FC = () => {
   useEffect(() => {
     loadGrades();
   }, []);
+
+  // Always select the first class if none is selected and grades are loaded
+  useEffect(() => {
+    if (grades.length > 0 && (!selectedGrade || selectedGrade === 'all')) {
+      const firstGradeId = grades[0].id || '';
+      setSelectedGrade(firstGradeId);
+      // Load students for the first class
+      (async () => {
+        try {
+          const studentsInGrade = await gradeService.getStudentsInGrade(firstGradeId);
+          const studentIds = studentsInGrade.map(s => s.studentId);
+          const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
+          setFilteredStudents(gradeStudents);
+        } catch (error) {
+          setFilteredStudents([]);
+        }
+      })();
+    }
+  }, [grades, students]);
 
   const handleGradeDotClick = (e: React.MouseEvent, gradeId: string) => {
     e.stopPropagation();
@@ -739,80 +851,74 @@ const ClassList: React.FC = () => {
   };
 
   const handleAddStudentsToGrade = async (gradeId: string, gradeName: string) => {
-    // Get students not already in this grade
-    const availableStudents = students.filter(async s => {
-      if (!s.id) return false;
-      return !(await gradeService.isStudentInGrade(gradeId, s.id));
-    });
-
-    let search = '';
-    let filtered = availableStudents;
-    let selectedIds: string[] = [];
-
-    const renderStudentList = (searchValue: string, selected: string[]) => {
-      filtered = availableStudents.filter(s =>
-        s.name.toLowerCase().includes(searchValue.toLowerCase())
-      );
-      return `
-        <input id="swal-student-search" class="swal2-input" placeholder="Search student..." value="${searchValue}" style="margin-bottom:8px;" />
-        <div style="max-height:180px;overflow-y:auto;text-align:left;">
-          ${filtered.map(s => `
-            <div class="swal2-checkbox" style="margin-bottom:4px;">
-              <input type="checkbox" name="student" value="${s.id ?? ''}" id="student-${s.id ?? ''}" ${selected.includes(s.id ?? '') ? 'checked' : ''} />
-              <label for="student-${s.id ?? ''}" style="margin-left:6px;cursor:pointer;">${s.name}</label>
-            </div>
-          `).join('')}
+    // Show a form to add a new student to the selected grade
+    const { value: formValues } = await Swal.fire({
+      title: `Add Student to ${gradeName}`,
+      html: `
+        <div class="text-left p-4">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+            <input id="student-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Juan Dela Cruz">
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Reading Level</label>
+            <input id="student-reading-level" type="number" min="1" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 5">
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Performance</label>
+            <select id="student-performance" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="Good">Good</option>
+              <option value="Excellent">Excellent</option>
+              <option value="Needs Improvement">Needs Improvement</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Parent Name (optional)</label>
+            <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Maria Dela Cruz">
+          </div>
         </div>
-      `;
-    };
-
-    await Swal.fire({
-      title: `Add Students to ${gradeName}`,
-      html: renderStudentList('', []),
+      `,
       showCancelButton: true,
       confirmButtonText: 'Add',
       cancelButtonText: 'Cancel',
       focusConfirm: false,
       preConfirm: () => {
-        const checked = Array.from(Swal.getPopup()?.querySelectorAll('input[name="student"]:checked') || []) as HTMLInputElement[];
-        if (checked.length === 0) {
-          Swal.showValidationMessage('Please select at least one student');
+        const name = (document.getElementById('student-name') as HTMLInputElement).value.trim();
+        const readingLevel = parseInt((document.getElementById('student-reading-level') as HTMLInputElement).value);
+        const performance = (document.getElementById('student-performance') as HTMLSelectElement).value;
+        const parentName = (document.getElementById('student-parent-name') as HTMLInputElement).value.trim();
+        if (!name || !readingLevel || isNaN(readingLevel)) {
+          Swal.showValidationMessage('Please fill in all required fields');
           return false;
         }
-        return checked.map(i => i.value);
-      },
-      didOpen: () => {
-        const input = Swal.getPopup()?.querySelector('#swal-student-search') as HTMLInputElement;
-        if (input) {
-          input.focus();
-          input.addEventListener('input', (e) => {
-            const value = (e.target as HTMLInputElement).value;
-            const checked = Array.from(Swal.getPopup()?.querySelectorAll('input[name="student"]:checked') || []) as HTMLInputElement[];
-            const checkedIds = checked.map(i => i.value);
-            Swal.update({ html: renderStudentList(value, checkedIds) });
-          });
-        }
-      },
-    }).then(async (result) => {
-      if (result.isConfirmed && Array.isArray(result.value)) {
-        try {
-          await Promise.all(result.value.map((studentId: string) => {
-            const student = students.find(s => s.id === studentId);
-            if (student) {
-              return gradeService.addStudentToGrade(gradeId, {
-                studentId: student.id!,
-                name: student.name
-              });
-            }
-          }));
-          showSuccess('Students Added', 'Selected students have been added to the grade.');
-          await loadStudents();
-          await loadClassStatistics();
-        } catch (err) {
-          showError('Failed to Add', 'An error occurred while adding students to the grade.');
-        }
+        return { name, readingLevel, performance, parentName };
       }
     });
+    if (formValues) {
+      try {
+        // Add to main students collection
+        const newStudent = {
+          name: formValues.name,
+          grade: gradeName,
+          readingLevel: formValues.readingLevel,
+          attendance: 0,
+          performance: formValues.performance,
+          lastAssessment: new Date().toISOString().split('T')[0],
+          status: 'active' as const,
+          teacherId: currentUser?.uid || '',
+          parentName: formValues.parentName || '',
+        };
+        const studentId = await studentService.addStudent(newStudent);
+        // Add to grade subcollection
+        await gradeService.addStudentToGrade(gradeId, { studentId, name: formValues.name });
+        showSuccess('Student Added', `${formValues.name} has been added to ${gradeName}.`);
+        await loadStudents();
+        await loadGrades();
+        await loadClassStatistics();
+      } catch (err) {
+        showError('Failed to Add', 'An error occurred while adding the student.');
+      }
+    }
   };
 
   if (isLoading) {
@@ -861,9 +967,12 @@ const ClassList: React.FC = () => {
                   {grades.map((grade) => (
                     <div
                       key={grade.id}
-                      className={`px-3 py-2 cursor-pointer transition-colors ${
-                        selectedGrade === grade.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      className={`px-3 py-2 cursor-pointer transition-colors rounded-lg border ${
+                        selectedGrade === grade.id
+                          ? 'bg-blue-100 border-blue-500 shadow-md'
+                          : 'hover:bg-gray-50 border-transparent'
                       } ${selectedGrades.includes(grade.id || '') ? 'bg-red-50' : ''}`}
+                      style={{ marginBottom: '4px' }}
                       onClick={() => grade.id && handleGradeSelect(grade.id)}
                     >
                       <div className="flex items-center justify-between">
@@ -919,13 +1028,26 @@ const ClassList: React.FC = () => {
                               <i className="fas fa-edit"></i>
                             </button>
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                grade.id && handleDeleteGrade(grade.id, grade.name);
+                                if (deletingGradeId === grade.id) return;
+                                setDeletingGradeId(grade.id || null);
+                                try {
+                                  if (grade.id) await handleDeleteGrade(grade.id, grade.name);
+                                } finally {
+                                  setDeletingGradeId(null);
+                                }
                               }}
-                              className="p-1 text-gray-400 hover:text-red-600"
+                              className={`p-1 text-gray-400 hover:text-red-600 ${deletingGradeId === grade.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={`Delete ${grade.name}`}
+                              aria-label={`Delete ${grade.name}`}
+                              disabled={deletingGradeId === grade.id}
                             >
-                              <i className="fas fa-trash"></i>
+                              {deletingGradeId === grade.id ? (
+                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #e3342f', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <i className="fas fa-trash"></i>
+                              )}
                             </button>
                           </div>
                         </div>
@@ -944,7 +1066,7 @@ const ClassList: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <h3 className="text-lg font-semibold text-gray-900">Students</h3>
                   <span className="px-2 py-1 text-sm font-medium text-gray-600 bg-gray-100 rounded-full">
-                    {students.length} students
+                    {(selectedGrade && selectedGrade !== 'all') ? filteredStudents.length : 0} students
                   </span>
                 </div>
                 <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
@@ -963,10 +1085,13 @@ const ClassList: React.FC = () => {
                     onChange={(e) => setSortBy(e.target.value)}
                     className="block w-full pl-2.5 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                   >
-                    <option value="name">Sort by Name</option>
-                    <option value="readingLevel">Sort by Reading Level</option>
-                    <option value="attendance">Sort by Attendance</option>
-                    <option value="performance">Sort by Performance</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="readingLevel-desc">Reading Level (High to Low)</option>
+                    <option value="readingLevel-asc">Reading Level (Low to High)</option>
+                    <option value="attendance-desc">Attendance (High to Low)</option>
+                    <option value="attendance-asc">Attendance (Low to High)</option>
+                    <option value="performance">Performance (A-Z)</option>
                   </select>
                 </div>
               </div>
@@ -984,14 +1109,13 @@ const ClassList: React.FC = () => {
                       className="block w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                   </div>
+                  <button
+                    onClick={handleDeleteAllStudents}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                  >
+                    Delete All Students
+                  </button>
                   <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleAddStudent}
-                      className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <i className="fas fa-plus mr-1.5"></i>
-                      Add Student
-                    </button>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

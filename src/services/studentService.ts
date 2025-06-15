@@ -185,6 +185,7 @@ class StudentService {
       // Find and delete student from all grade collections
       const gradesRef = collection(db, 'classGrades');
       const gradesSnapshot = await getDocs(gradesRef);
+      const affectedGradeIds: string[] = [];
 
       for (const gradeDoc of gradesSnapshot.docs) {
         const studentsRef = collection(gradeDoc.ref, 'students');
@@ -193,6 +194,7 @@ class StudentService {
 
         studentInGradeSnapshot.docs.forEach((doc) => {
           batch.delete(doc.ref);
+          affectedGradeIds.push(gradeDoc.id);
         });
       }
 
@@ -200,6 +202,18 @@ class StudentService {
       await batch.commit();
       console.log('Successfully deleted student and all related records');
 
+      // Update studentCount for affected grades
+      for (const gradeId of new Set(affectedGradeIds)) {
+        try {
+          const gradeRef = doc(db, 'classGrades', gradeId);
+          const studentsRef = collection(gradeRef, 'students');
+          const studentsSnap = await getDocs(studentsRef);
+          const newCount = studentsSnap.size;
+          await updateDoc(gradeRef, { studentCount: newCount });
+        } catch (err) {
+          console.error('Failed to update student count for grade', gradeId, err);
+        }
+      }
     } catch (error) {
       console.error('Error deleting student:', error);
       if (error instanceof Error) {
@@ -344,6 +358,23 @@ class StudentService {
       console.error('Error getting class statistics:', error);
       throw new Error('Failed to fetch class statistics');
     }
+  }
+
+  // Batch delete multiple students (optimized: only main collection)
+  async batchDeleteStudents(studentIds: string[]): Promise<void> {
+    const auth = getAuth();
+    if (!auth.currentUser) throw new Error('No authenticated user');
+    const BATCH_SIZE = 400; // Firestore max is 500, use 400 for safety
+    for (let i = 0; i < studentIds.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = studentIds.slice(i, i + BATCH_SIZE);
+      for (const studentId of chunk) {
+        const studentRef = doc(db, this.collectionName, studentId);
+        batch.delete(studentRef);
+      }
+      await batch.commit();
+    }
+    // NOTE: If you want to clean up grade subcollections, do it in a separate function for performance.
   }
 }
 
