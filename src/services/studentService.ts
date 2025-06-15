@@ -13,7 +13,7 @@ import {
   writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
-import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
 
 export interface Student {
@@ -149,11 +149,67 @@ class StudentService {
   // Delete a student
   async deleteStudent(studentId: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, studentId);
-      await deleteDoc(docRef);
+      // Check authentication
+      const auth = getAuth();
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      console.log('Attempting to delete student:', {
+        studentId,
+        currentUser: auth.currentUser.uid
+      });
+
+      // Get student data first to verify ownership
+      const studentRef = doc(db, this.collectionName, studentId);
+      const studentDoc = await getDoc(studentRef);
+      
+      if (!studentDoc.exists()) {
+        throw new Error('Student not found');
+      }
+
+      const studentData = studentDoc.data();
+      console.log('Student data:', studentData);
+
+      // Verify the current user owns this student record
+      if (studentData.teacherId !== auth.currentUser.uid) {
+        throw new Error('Unauthorized to delete this student');
+      }
+
+      // Start a batch write
+      const batch = writeBatch(db);
+
+      // Delete the student document
+      batch.delete(studentRef);
+
+      // Find and delete student from all grade collections
+      const gradesRef = collection(db, 'classGrades');
+      const gradesSnapshot = await getDocs(gradesRef);
+
+      for (const gradeDoc of gradesSnapshot.docs) {
+        const studentsRef = collection(gradeDoc.ref, 'students');
+        const studentInGradeQuery = query(studentsRef, where('studentId', '==', studentId));
+        const studentInGradeSnapshot = await getDocs(studentInGradeQuery);
+
+        studentInGradeSnapshot.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+      }
+
+      // Commit the batch
+      await batch.commit();
+      console.log('Successfully deleted student and all related records');
+
     } catch (error) {
       console.error('Error deleting student:', error);
-      throw new Error('Failed to delete student');
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      throw new Error(error instanceof Error ? error.message : 'Failed to delete student');
     }
   }
 
@@ -292,4 +348,4 @@ class StudentService {
 }
 
 export const studentService = new StudentService();
-export default studentService; 
+export default studentService;

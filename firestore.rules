@@ -92,6 +92,15 @@ service cloud.firestore {
       allow delete: if request.auth != null && isAdmin();
     }
     
+    // Stories collection rules
+    match /stories/{storyId} {
+      // Allow admin to read/write all stories
+      allow read, write: if request.auth != null && isAdmin();
+      
+      // Allow teachers to read stories
+      allow read: if request.auth != null && isTeacher();
+    }
+    
     // Default rule - deny all other access
     match /{document=**} {
       allow read, write: if false;

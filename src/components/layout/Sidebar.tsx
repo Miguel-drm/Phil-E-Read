@@ -37,6 +37,7 @@ const iconMap: Record<string, React.ReactNode> = {
   teachers: <SchoolIcon fontSize="medium" />,
   students: <PersonIcon fontSize="medium" />,
   settings: <SettingsIcon fontSize="medium" />,
+  stories: <MenuBookIcon fontSize="medium" />
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -62,6 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           { path: '/admin/teachers', label: 'Teachers', icon: 'teachers' },
           { path: '/admin/students', label: 'Students', icon: 'students' },
           { path: '/admin/reports', label: 'Reports', icon: 'reports' },
+          { path: '/admin/stories', label: 'Stories', icon: 'stories' },
           { path: '/admin/settings', label: 'Settings', icon: 'settings' }
         ];
       case 'teacher':

@@ -14,6 +14,7 @@ import {
   collectionGroup
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { getAuth } from 'firebase/auth';
 
 export interface ClassGrade {
   id?: string;
@@ -43,8 +44,14 @@ class GradeService {
   // Create a new class grade
   async createGrade(gradeData: Omit<ClassGrade, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+      const auth = getAuth();
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
       const docRef = await addDoc(collection(db, this.collectionName), {
         ...gradeData,
+        teacherId: auth.currentUser.uid, // Add the current user's ID as teacherId
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -157,13 +164,37 @@ class GradeService {
   // Update student count for a grade
   async updateStudentCount(gradeId: string, count: number): Promise<void> {
     try {
+      const auth = getAuth();
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      console.log('Updating student count:', {
+        gradeId,
+        count,
+        userId: auth.currentUser.uid
+      });
+
       const docRef = doc(db, this.collectionName, gradeId);
+      const gradeDoc = await getDoc(docRef);
+      
+      if (!gradeDoc.exists()) {
+        throw new Error('Grade not found');
+      }
+
       await updateDoc(docRef, {
         studentCount: count,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error('Error updating student count:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
       throw new Error('Failed to update student count');
     }
   }
@@ -189,26 +220,46 @@ class GradeService {
   }
 
   // Add a student to a grade
-  async addStudentToGrade(gradeId: string, student: { studentId: string; name: string }): Promise<void> {
+  async addStudentToGrade(gradeId: string, studentData: any) {
     try {
-      // Add to students subcollection
+      const auth = getAuth();
+      console.log('Current user:', auth.currentUser);
+      
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      // Verify the grade exists and get current count
       const gradeRef = doc(db, this.collectionName, gradeId);
+      const gradeDoc = await getDoc(gradeRef);
+      
+      if (!gradeDoc.exists()) {
+        throw new Error('Grade not found');
+      }
+
+      // Add to students subcollection first
       const studentsRef = collection(gradeRef, this.studentsSubcollection);
       
+      // Check if student is already in the grade
+      const existingStudent = await this.isStudentInGrade(gradeId, studentData.studentId);
+      if (existingStudent) {
+        console.log('Student already in grade:', studentData.studentId);
+        return;
+      }
+
       await addDoc(studentsRef, {
-        studentId: student.studentId,
-        name: student.name,
+        studentId: studentData.studentId,
+        name: studentData.name,
         gradeId: gradeId,
         addedAt: serverTimestamp()
       });
 
-      // Update student count
-      const gradeDoc = await getDoc(gradeRef);
+      // Update student count after successfully adding the student
       const currentCount = gradeDoc.data()?.studentCount || 0;
       await this.updateStudentCount(gradeId, currentCount + 1);
     } catch (error) {
       console.error('Error adding student to grade:', error);
-      throw new Error('Failed to add student to grade');
+      throw error;
     }
   }
 
@@ -240,17 +291,40 @@ class GradeService {
   // Get all students in a grade
   async getStudentsInGrade(gradeId: string): Promise<GradeStudent[]> {
     try {
+      // Log authentication state
+      const auth = getAuth();
+      console.log('Current user:', auth.currentUser);
+      console.log('Getting students for grade:', gradeId);
+      
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
       const gradeRef = doc(db, this.collectionName, gradeId);
       const studentsRef = collection(gradeRef, this.studentsSubcollection);
       const q = query(studentsRef, orderBy('name'));
       
+      console.log('Executing query for students in grade...');
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      console.log('Found students:', querySnapshot.size);
+      
+      const students = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as GradeStudent[];
+      
+      console.log('Processed student data:', students);
+      return students;
     } catch (error) {
       console.error('Error getting students in grade:', error);
+      // Add more detailed error information
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
       throw new Error('Failed to fetch students in grade');
     }
   }
@@ -271,4 +345,4 @@ class GradeService {
   }
 }
 
-export const gradeService = new GradeService(); 
+export const gradeService = new GradeService();

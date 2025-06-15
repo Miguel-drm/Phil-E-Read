@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { gradeService, type ClassGrade } from '../../services/gradeService';
 import { studentService, type Student } from '../../services/studentService';
 import { readingSessionService, type ReadingSession } from '../../services/readingSessionService';
+import { getStories, type Story } from '../../services/storyService';
 import { useNavigate } from 'react-router-dom';
 import { 
   PlayIcon, 
@@ -18,27 +19,9 @@ const Reading: React.FC = () => {
   const [grades, setGrades] = useState<ClassGrade[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [readingSessions, setReadingSessions] = useState<ReadingSession[]>([]);
-
-  // Sample stories data - replace with actual data from your backend
-  const stories = [
-    {
-      id: 1,
-      title: 'The Magic Tree House',
-      level: 'Level 2',
-      category: 'Adventure',
-      coverImage: 'https://example.com/magic-tree-house.jpg',
-      description: 'Join Jack and Annie on their magical adventures through time and space.'
-    },
-    {
-      id: 2,
-      title: 'Charlotte\'s Web',
-      level: 'Level 3',
-      category: 'Classic',
-      coverImage: 'https://example.com/charlottes-web.jpg',
-      description: 'A heartwarming tale of friendship between a pig named Wilbur and a spider named Charlotte.'
-    },
-    // Add more stories as needed
-  ];
+  const [stories, setStories] = useState<Story[]>([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
+  const [storiesError, setStoriesError] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     if (!currentUser?.uid) return;
@@ -49,6 +32,21 @@ const Reading: React.FC = () => {
       console.error('Error loading sessions:', error);
     }
   }, [currentUser?.uid]);
+
+  const loadStories = useCallback(async () => {
+    try {
+      setStoriesLoading(true);
+      setStoriesError(null);
+      const fetchedStories = await getStories({}); // Fetch all stories initially
+      setStories(fetchedStories);
+    } catch (error) {
+      console.error('Error loading stories:', error);
+      setStoriesError('Failed to load stories. Please try again.');
+      Swal.fire('Error', 'Failed to load stories', 'error');
+    } finally {
+      setStoriesLoading(false);
+    }
+  }, []);
 
   const loadGrades = useCallback(async () => {
     try {
@@ -75,8 +73,9 @@ const Reading: React.FC = () => {
       loadGrades();
       loadStudents();
       loadSessions();
+      loadStories();
     }
-  }, [currentUser?.uid, loadGrades, loadStudents, loadSessions]);
+  }, [currentUser?.uid, loadGrades, loadStudents, loadSessions, loadStories]);
 
   const loadStudentsByGrade = async (gradeId: string) => {
     try {
@@ -91,134 +90,150 @@ const Reading: React.FC = () => {
   };
 
   const handleScheduleSession = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Reading Session',
-      html: `
-        <div class="text-left p-4">
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Session Title</label>
-            <input 
-              id="session-title" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-              placeholder="e.g., Group A - Level 2 Reading"
-            >
-          </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Book Title</label>
-            <input 
-              id="session-book" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-              placeholder="e.g., The Magic Tree House"
-            >
-          </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Class/Grade</label>
-            <select 
-              id="session-grade" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select a class</option>
-              ${grades.map(grade => `
-                <option value="${grade.id}">${grade.name}</option>
-              `).join('')}
-            </select>
-          </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Students</label>
-            <div id="student-list" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2">
-              <p class="text-sm text-gray-500 italic">Select a class to view students</p>
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Reading Session',
+        html: `
+          <div class="text-left p-4">
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Session Title</label>
+              <input 
+                id="session-title" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                placeholder="e.g., Group A - Level 2 Reading"
+              >
+            </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Book Title</label>
+              <input 
+                id="session-book" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                placeholder="e.g., The Magic Tree House"
+              >
+            </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Class/Grade</label>
+              <select 
+                id="session-grade" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select a class</option>
+                ${grades.map(grade => `
+                  <option value="${grade.id}">${grade.name}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Students</label>
+              <div id="student-list" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2">
+                <p class="text-sm text-gray-500 italic">Select a class to view students</p>
+              </div>
             </div>
           </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Start Session',
-      cancelButtonText: 'Cancel',
-      focusConfirm: false,
-      customClass: {
-        container: 'reading-session-modal',
-        popup: 'rounded-lg shadow-xl',
-        title: 'text-xl font-semibold text-gray-900',
-        confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md',
-        cancelButton: 'bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md border border-gray-300'
-      },
-      didOpen: () => {
-        const gradeSelect = document.getElementById('session-grade') as HTMLSelectElement;
-        if (gradeSelect) {
-          gradeSelect.addEventListener('change', async (e) => {
-            const gradeId = (e.target as HTMLSelectElement).value;
-            if (gradeId) {
-              const gradeStudents = await loadStudentsByGrade(gradeId);
-              const studentList = document.getElementById('student-list');
-              if (studentList) {
-                studentList.innerHTML = gradeStudents.length > 0 
-                  ? gradeStudents.map(student => `
-                      <div class="flex items-center space-x-2 mb-2">
-                        <input type="checkbox" id="student-${student.id}" value="${student.name}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                        <label for="student-${student.id}" class="text-sm text-gray-700">${student.name}</label>
-                      </div>
-                    `).join('')
-                  : '<p class="text-sm text-gray-500 italic">No students in this class</p>';
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Start Session',
+        cancelButtonText: 'Cancel',
+        focusConfirm: false,
+        customClass: {
+          container: 'reading-session-modal',
+          popup: 'rounded-lg shadow-xl',
+          title: 'text-xl font-semibold text-gray-900',
+          confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md',
+          cancelButton: 'bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md border border-gray-300'
+        },
+        didOpen: () => {
+          const gradeSelect = document.getElementById('session-grade') as HTMLSelectElement;
+          if (gradeSelect) {
+            gradeSelect.addEventListener('change', async (e) => {
+              const gradeId = (e.target as HTMLSelectElement).value;
+              if (gradeId) {
+                const gradeStudents = await loadStudentsByGrade(gradeId);
+                const studentList = document.getElementById('student-list');
+                if (studentList) {
+                  studentList.innerHTML = gradeStudents.length > 0 
+                    ? gradeStudents.map(student => `
+                        <div class="flex items-center space-x-2 mb-2">
+                          <input type="checkbox" id="student-${student.id}" value="${student.name}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                          <label for="student-${student.id}" class="text-sm text-gray-700">${student.name}</label>
+                        </div>
+                      `).join('')
+                    : '<p class="text-sm text-gray-500 italic">No students in this class</p>';
+                }
+              } else {
+                const studentList = document.getElementById('student-list');
+                if (studentList) {
+                  studentList.innerHTML = '<p class="text-sm text-gray-500 italic">Select a class to view students</p>';
+                }
               }
-            } else {
-              const studentList = document.getElementById('student-list');
-              if (studentList) {
-                studentList.innerHTML = '<p class="text-sm text-gray-500 italic">Select a class to view students</p>';
-              }
-            }
+            });
+          }
+        },
+        preConfirm: () => {
+          const title = (document.getElementById('session-title') as HTMLInputElement).value;
+          const book = (document.getElementById('session-book') as HTMLInputElement).value;
+          const gradeId = (document.getElementById('session-grade') as HTMLSelectElement).value;
+          
+          const selectedStudents = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+            .map((checkbox: Element) => (checkbox as HTMLInputElement).value);
+
+          if (!title || !book || !gradeId || selectedStudents.length === 0) {
+            Swal.showValidationMessage('Please fill in all required fields and select at least one student');
+            return false;
+          }
+
+          return {
+            title,
+            book,
+            gradeId,
+            students: selectedStudents,
+            status: 'pending' as const,
+            teacherId: currentUser?.uid
+          };
+        }
+      });
+
+      if (formValues && currentUser?.uid) {
+        try {
+          // Ensure teacherId is properly set
+          const sessionData = {
+            ...formValues,
+            teacherId: currentUser.uid,
+            status: 'pending' as const
+          };
+
+          const sessionId = await readingSessionService.createSession(sessionData);
+          const newSession = {
+            id: sessionId,
+            ...sessionData,
+            createdAt: new Date()
+          };
+          
+          setReadingSessions(prev => [...prev, newSession]);
+          
+          await Swal.fire({
+            icon: 'success',
+            title: 'Session Created!',
+            text: 'The reading session has been created successfully.',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        } catch (error) {
+          console.error('Error creating session:', error);
+          await Swal.fire({
+            icon: 'error',
+            title: 'Permission Error',
+            text: 'You may not have permission to create reading sessions. Please check your role and try again.',
           });
         }
-      },
-      preConfirm: () => {
-        const title = (document.getElementById('session-title') as HTMLInputElement).value;
-        const book = (document.getElementById('session-book') as HTMLInputElement).value;
-        const gradeId = (document.getElementById('session-grade') as HTMLSelectElement).value;
-        
-        const selectedStudents = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
-          .map((checkbox: Element) => (checkbox as HTMLInputElement).value);
-
-        if (!title || !book || !gradeId || selectedStudents.length === 0) {
-          Swal.showValidationMessage('Please fill in all required fields and select at least one student');
-          return false;
-        }
-
-        return {
-          title,
-          book,
-          gradeId,
-          students: selectedStudents,
-          status: 'pending' as const,
-          teacherId: currentUser?.uid
-        };
       }
-    });
-
-    if (formValues && currentUser?.uid) {
-      try {
-        const sessionId = await readingSessionService.createSession(formValues);
-        const newSession = {
-          id: sessionId,
-          ...formValues,
-          createdAt: new Date()
-        };
-        
-        setReadingSessions(prev => [...prev, newSession]);
-        
-        await Swal.fire({
-          icon: 'success',
-          title: 'Session Created!',
-          text: 'The reading session has been created successfully.',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        console.error('Error creating session:', error);
-        await Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to create the reading session. Please try again.',
-        });
-      }
+    } catch (error) {
+      console.error('Error in handleScheduleSession:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'An unexpected error occurred. Please try again.',
+      });
     }
   };
 
@@ -422,6 +437,45 @@ const Reading: React.FC = () => {
     }
   };
 
+  const handleViewStoryDetails = async (story: Story) => {
+    await Swal.fire({
+      title: story.title,
+      html: `
+        <div class="text-left">
+        <div class="mb-4">
+          <h3 class="text-sm font-semibold text-gray-600 mb-1">Language</h3>
+          <p class="text-gray-800">${story.language || 'Not specified'}</p>
+        </div>
+          <div class="mb-4">
+            <h3 class="text-sm font-semibold text-gray-600 mb-1">Description</h3>
+            <p class="text-gray-800">${story.description || 'No description available'}</p>
+          </div>
+          <div class="mt-6">
+            ${story.pdfUrl ? `
+              <a href="${story.pdfUrl}" 
+                 target="_blank" 
+                 class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View PDF
+              </a>
+            ` : '<p class="text-red-500">No PDF available</p>'}
+          </div>
+        </div>
+      `,
+      showCloseButton: true,
+      showConfirmButton: false,
+      width: '32rem',
+      customClass: {
+        container: 'story-details-modal',
+        popup: 'rounded-lg shadow-xl',
+        htmlContainer: 'p-6'
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container-fluid px-4 sm:px-6 lg:px-8 py-8">
@@ -552,32 +606,43 @@ const Reading: React.FC = () => {
 
         {activeTab === 'stories' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 md:gap-6">
-            {stories.map((story) => (
-              <div key={story.id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
-                <div className="relative pb-[56.25%] bg-gray-200">
-                  <img
-                    src={story.coverImage}
-                    alt={story.title}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-4 flex-grow">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-medium text-gray-900 line-clamp-1">{story.title}</h3>
-                    <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full whitespace-nowrap ml-2">
-                      {story.level}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">{story.description}</p>
-                  <div className="flex items-center justify-between mt-auto">
-                    <span className="text-sm text-gray-500">{story.category}</span>
-                    <button className="text-blue-600 hover:text-blue-900 text-sm font-medium">
-                      View Details
-              </button>
-            </div>
-          </div>
-              </div>
-            ))}
+            {storiesLoading ? (
+              <div className="col-span-full text-center py-10">Loading stories...</div>
+            ) : storiesError ? (
+              <div className="col-span-full text-center py-10 text-red-500">{storiesError}</div>
+            ) : stories.length === 0 ? (
+              <div className="col-span-full text-center py-10 text-gray-500">No stories available.</div>
+            ) : (
+              stories.map((story) => (
+  <div key={story.id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
+    <div className="relative pb-[56.25%] bg-gray-200">
+      {/* You might want to add a placeholder or actual cover image logic here if stories have one */}
+      <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-lg">
+        No Image
+      </div>
+    </div>
+    <div className="p-4 flex-grow">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-lg font-medium text-gray-900 line-clamp-1">{story.title}</h3>
+      </div>
+      <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+        {story.description || 'No description available'}
+      </p>
+      <div className="flex items-center justify-between mt-auto">
+        <button 
+          onClick={() => handleViewStoryDetails(story)}
+          className="inline-flex items-center text-blue-600 hover:text-blue-900 text-sm font-medium"
+        >
+          <span>View Details</span>
+          <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+))
+            )}
         </div>
       )}
       </div>
@@ -585,4 +650,4 @@ const Reading: React.FC = () => {
   );
 };
 
-export default Reading; 
+export default Reading;

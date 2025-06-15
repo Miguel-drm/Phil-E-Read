@@ -1,5 +1,17 @@
+import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
-import { collection, addDoc, getDocs, query, where, updateDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  query, 
+  where, 
+  updateDoc, 
+  doc, 
+  deleteDoc, 
+  getDoc,
+  serverTimestamp 
+} from 'firebase/firestore';
 
 export type ReadingSession = {
   id?: string;
@@ -17,14 +29,33 @@ export type ReadingSession = {
 export const readingSessionService = {
   async createSession(session: Omit<ReadingSession, 'id' | 'createdAt'>): Promise<string> {
     try {
+      const auth = getAuth();
+      if (!auth.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      console.log('Creating session with data:', {
+        ...session,
+        teacherId: auth.currentUser.uid
+      });
+
       const docRef = await addDoc(collection(db, 'readingSessions'), {
         ...session,
-        createdAt: new Date(),
+        teacherId: auth.currentUser.uid, // Ensure teacherId is set to current user
+        createdAt: serverTimestamp(),
       });
+      
       return docRef.id;
     } catch (error) {
       console.error('Error creating session:', error);
-      throw error;
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      throw new Error('Failed to create reading session');
     }
   },
 
@@ -94,4 +125,4 @@ export const readingSessionService = {
       throw error;
     }
   },
-}; 
+};

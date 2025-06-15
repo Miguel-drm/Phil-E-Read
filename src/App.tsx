@@ -5,6 +5,7 @@ import AuthWrapper from './components/auth/AuthWrapper';
 import RoleBasedRedirect from './components/auth/RoleBasedRedirect';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
+import StoriesManagement from './pages/admin/StoriesManagement';
 
 // Dashboard Pages
 import AdminDashboardPage from './pages/admin/AdminDashboard';
@@ -39,6 +40,7 @@ const App: React.FC = () => {
                 <DashboardLayout>
                   <Routes>
                     <Route path="dashboard" element={<AdminDashboardPage />} />
+                    <Route path="stories" element={<StoriesManagement />} />
                     {/* Add more admin routes here */}
                   </Routes>
                 </DashboardLayout>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import backgroundImage from '../../assets/img/bg.png'; // Make sure to place bg.png in src/assets
+import Swal from 'sweetalert2';
 
 interface SignupProps {
   onSwitchToLogin: () => void;
@@ -46,6 +47,15 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
       setLoading(true);
       try {
         await signUp(email, password, name);
+        await Swal.fire({
+          icon: 'success',
+          title: 'Account Created Successfully!',
+          text: 'You can now log in with your credentials.',
+          timer: 2000,
+          timerProgressBar: true,
+          showConfirmButton: false
+        });
+        onSwitchToLogin();
       } catch (error: any) {
         const errorMessage = getErrorMessage(error.code);
         setError(errorMessage);
