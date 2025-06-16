@@ -376,6 +376,26 @@ class StudentService {
     }
     // NOTE: If you want to clean up grade subcollections, do it in a separate function for performance.
   }
+
+  // Get all students (admin use)
+  async getAllStudents(): Promise<Student[]> {
+    console.log("getAllStudents called");
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      console.log("querySnapshot size:", querySnapshot.size);
+      const students: Student[] = [];
+      querySnapshot.forEach((doc) => {
+        students.push({
+          id: doc.id,
+          ...doc.data()
+        } as Student);
+      });
+      return students;
+    } catch (error) {
+      console.error('Error getting all students:', error);
+      throw new Error('Failed to fetch all students');
+    }
+  }
 }
 
 export const studentService = new StudentService();

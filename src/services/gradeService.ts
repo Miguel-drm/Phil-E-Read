@@ -320,33 +320,18 @@ class GradeService {
   // Get all students in a grade
   async getStudentsInGrade(gradeId: string): Promise<GradeStudent[]> {
     try {
-      // Log authentication state
-      const auth = getAuth();
-      console.log('Current user:', auth.currentUser);
-      console.log('Getting students for grade:', gradeId);
-      
-      if (!auth.currentUser) {
-        throw new Error('No authenticated user');
-      }
-
+      // Removed auth.currentUser check to allow admin access
       const gradeRef = doc(db, this.collectionName, gradeId);
       const studentsRef = collection(gradeRef, this.studentsSubcollection);
       const q = query(studentsRef, orderBy('name'));
-      
-      console.log('Executing query for students in grade...');
       const querySnapshot = await getDocs(q);
-      console.log('Found students:', querySnapshot.size);
-      
       const students = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as GradeStudent[];
-      
-      console.log('Processed student data:', students);
       return students;
     } catch (error) {
       console.error('Error getting students in grade:', error);
-      // Add more detailed error information
       if (error instanceof Error) {
         console.error('Error details:', {
           name: error.name,

@@ -6,6 +6,8 @@ import RoleBasedRedirect from './components/auth/RoleBasedRedirect';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 import StoriesManagement from './pages/admin/StoriesManagement';
+import Teachers from './pages/admin/Teachers';
+import Students from './pages/admin/Students';
 
 // Dashboard Pages
 import AdminDashboardPage from './pages/admin/AdminDashboard';
@@ -40,7 +42,9 @@ const App: React.FC = () => {
                 <DashboardLayout>
                   <Routes>
                     <Route path="dashboard" element={<AdminDashboardPage />} />
+                    <Route path="teachers" element={<Teachers />} />
                     <Route path="stories" element={<StoriesManagement />} />
+                    <Route path="students" element={<Students />} />
                     {/* Add more admin routes here */}
                   </Routes>
                 </DashboardLayout>

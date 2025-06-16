@@ -256,12 +256,7 @@ const Reports: React.FC = () => {
                           <span>Reading Level</span>
                           <span>{data.readingLevel}</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(data.readingLevel / 3) * 100}%` }}
-                          ></div>
-                        </div>
+                        {/* Remove progress bar for readingLevel as a number */}
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between text-xs text-gray-600 mb-1">
@@ -340,7 +335,7 @@ const Reports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        Level {student.readingLevel}
+                        {student.readingLevel}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

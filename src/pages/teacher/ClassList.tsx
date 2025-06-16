@@ -102,9 +102,9 @@ const ClassList: React.FC = () => {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'readingLevel-desc':
-          return b.readingLevel - a.readingLevel;
+          return String(b.readingLevel).localeCompare(String(a.readingLevel));
         case 'readingLevel-asc':
-          return a.readingLevel - b.readingLevel;
+          return String(a.readingLevel).localeCompare(String(b.readingLevel));
         case 'attendance-desc':
           return b.attendance - a.attendance;
         case 'attendance-asc':
@@ -171,7 +171,7 @@ const ClassList: React.FC = () => {
           const students = jsonData.map((row: any) => ({
             name: row.Name || row.name || '',
             grade: row.Grade || row.grade || '',
-            readingLevel: parseInt(row.ReadingLevel || row.readingLevel || '1'),
+            readingLevel: row.ReadingLevel || row.readingLevel || '',
             // parentId and parentName can be added here if available in import
           }));
           resolve(students);
@@ -862,14 +862,11 @@ const ClassList: React.FC = () => {
           </div>
           <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">Reading Level</label>
-            <input id="student-reading-level" type="number" min="1" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 5">
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Performance</label>
-            <select id="student-performance" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="Good">Good</option>
-              <option value="Excellent">Excellent</option>
-              <option value="Needs Improvement">Needs Improvement</option>
+            <select id="student-reading-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="">Select reading level</option>
+              <option value="Independent">Independent</option>
+              <option value="Instructional">Instructional</option>
+              <option value="Frustrational">Frustrational</option>
             </select>
           </div>
           <div class="mb-4">
@@ -884,14 +881,13 @@ const ClassList: React.FC = () => {
       focusConfirm: false,
       preConfirm: () => {
         const name = (document.getElementById('student-name') as HTMLInputElement).value.trim();
-        const readingLevel = parseInt((document.getElementById('student-reading-level') as HTMLInputElement).value);
-        const performance = (document.getElementById('student-performance') as HTMLSelectElement).value;
+        const readingLevel = (document.getElementById('student-reading-level') as HTMLSelectElement).value;
         const parentName = (document.getElementById('student-parent-name') as HTMLInputElement).value.trim();
-        if (!name || !readingLevel || isNaN(readingLevel)) {
+        if (!name || !readingLevel) {
           Swal.showValidationMessage('Please fill in all required fields');
           return false;
         }
-        return { name, readingLevel, performance, parentName };
+        return { name, readingLevel, parentName };
       }
     });
     if (formValues) {
@@ -902,7 +898,6 @@ const ClassList: React.FC = () => {
           grade: gradeName,
           readingLevel: formValues.readingLevel,
           attendance: 0,
-          performance: formValues.performance,
           lastAssessment: new Date().toISOString().split('T')[0],
           status: 'active' as const,
           teacherId: currentUser?.uid || '',

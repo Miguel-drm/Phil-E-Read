@@ -9,7 +9,7 @@ import {
   type UserCredential
 } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'parent' | 'teacher';
 
@@ -164,4 +164,25 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
       role: determineUserRole(user.email || '')
     };
   }
+};
+
+// Fetch all teachers (optionally filtered by school if school info is present)
+export const getAllTeachers = async (schoolId?: string) => {
+  const q = schoolId
+    ? query(collection(db, 'users'), where('role', '==', 'teacher'), where('schoolId', '==', schoolId))
+    : query(collection(db, 'users'), where('role', '==', 'teacher'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+// Update any teacher's profile by ID (admin only)
+export const updateTeacherProfile = async (teacherId: string, updates: { displayName?: string }) => {
+  if (!teacherId) throw new Error('No teacher ID provided');
+  await updateDoc(doc(db, 'users', teacherId), updates);
+};
+
+// Delete a teacher by ID (admin only)
+export const deleteTeacher = async (teacherId: string) => {
+  if (!teacherId) throw new Error('No teacher ID provided');
+  await deleteDoc(doc(db, 'users', teacherId));
 }; 
