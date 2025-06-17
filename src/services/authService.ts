@@ -23,6 +23,11 @@ export interface UserProfile {
   email?: string;
   photoURL?: string;
   role?: UserRole;
+  phoneNumber?: string;
+  gradeLevel?: string;
+  school?: string;
+  bio?: string;
+  isProfileComplete?: boolean;
 }
 
 // Function to determine user role based on email domain
@@ -104,15 +109,47 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Update user profile
+// Check if user profile is complete
+export const isProfileComplete = (profile: UserProfile): boolean => {
+  if (!profile) return false;
+  
+  // Basic required fields
+  const hasBasicInfo = Boolean(profile.displayName && profile.email);
+  
+  // Role-specific required fields
+  if (profile.role === 'teacher') {
+    return hasBasicInfo && 
+           Boolean(profile.phoneNumber) && 
+           Boolean(profile.school) && 
+           Boolean(profile.bio);
+  } else if (profile.role === 'parent') {
+    return hasBasicInfo && 
+           Boolean(profile.phoneNumber) && 
+           Boolean(profile.gradeLevel);
+  } else if (profile.role === 'admin') {
+    return hasBasicInfo && 
+           Boolean(profile.phoneNumber) && 
+           Boolean(profile.school);
+  }
+  
+  return hasBasicInfo;
+};
+
+// Update user profile with completion check
 export const updateUserProfile = async (updates: UserProfile): Promise<void> => {
   try {
     if (auth.currentUser) {
       await updateProfile(auth.currentUser, updates);
       
-      // Update user document in Firestore
+      // Check if profile is complete after updates
+      const updatedProfile = { ...updates };
+      const isComplete = isProfileComplete(updatedProfile);
+      
+      // Update user document in Firestore with completion status
       await setDoc(doc(db, 'users', auth.currentUser.uid), {
-        ...updates
+        ...updates,
+        isProfileComplete: isComplete,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
     } else {
       throw new Error('No user is currently signed in');

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
-import { onAuthStateChange, signIn, signUp, signOutUser, resetPassword, getUserProfile } from '../services/authService';
+import { onAuthStateChange, signIn, signUp, signOutUser, resetPassword, getUserProfile, isProfileComplete } from '../services/authService';
 import type { UserProfile, UserRole } from '../services/authService';
 
 interface AuthContextType {
@@ -8,6 +8,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   userRole: UserRole | null;
   loading: boolean;
+  isProfileComplete: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -105,6 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     userProfile,
     userRole,
     loading,
+    isProfileComplete: userProfile ? isProfileComplete(userProfile) : false,
     signIn: handleSignIn,
     signUp: handleSignUp,
     signOut: handleSignOut,

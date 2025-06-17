@@ -7,7 +7,7 @@ import { showInfo, showError, showSuccess, showConfirmation } from '../../servic
 import Swal from 'sweetalert2';
 
 const ClassList: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userRole, isProfileComplete } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
@@ -30,6 +30,17 @@ const ClassList: React.FC = () => {
   const [isCreateGradeModalOpen, setIsCreateGradeModalOpen] = useState(false);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [deletingGradeId, setDeletingGradeId] = useState<string | null>(null);
+  const [loadingStudentId, setLoadingStudentId] = useState<string | null>(null);
+  const [loadingViewGradeId, setLoadingViewGradeId] = useState<string | null>(null);
+  const [loadingAddStudentToGradeId, setLoadingAddStudentToGradeId] = useState<string | null>(null);
+  const [loadingEditGradeId, setLoadingEditGradeId] = useState<string | null>(null);
+  const [deletingAllStudents, setDeletingAllStudents] = useState(false);
+  const [isCreatingGrade, setIsCreatingGrade] = useState(false);
+  const [isAddingStudentToGrade, setIsAddingStudentToGrade] = useState(false);
+  const [isDeletingSelectedGrades, setIsDeletingSelectedGrades] = useState(false);
+
+  // Helper function to check if the current user has management permissions
+  const canManage = (userRole === 'teacher' || userRole === 'admin') && isProfileComplete;
 
   // Load students on component mount
   useEffect(() => {
@@ -246,12 +257,22 @@ const ClassList: React.FC = () => {
     // No need to call showInfo here, as it's not used in the new implementation
   };
 
-  const handleEditStudent = (studentId: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
+  const handleEditStudent = async (studentId: string) => {
+    setLoadingStudentId(studentId);
+    try {
+      // No need to call showInfo here, as it's not used in the new implementation
+    } finally {
+      setLoadingStudentId(null);
+    }
   };
 
-  const handleViewProfile = (studentId: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
+  const handleViewProfile = async (studentId: string) => {
+    setLoadingStudentId(studentId);
+    try {
+      // No need to call showInfo here, as it's not used in the new implementation
+    } finally {
+      setLoadingStudentId(null);
+    }
   };
 
   const handleContactParent = (studentId: string, parentEmail: string) => {
@@ -279,6 +300,7 @@ const ClassList: React.FC = () => {
       'warning'
     );
     if (result.isConfirmed) {
+      setDeletingAllStudents(true);
       try {
         const ids = students.map(s => s.id).filter((id): id is string => Boolean(id));
         if (ids.length > 0) {
@@ -292,10 +314,15 @@ const ClassList: React.FC = () => {
           timer: 1800,
           showConfirmButton: false
         });
-        await loadStudents();
+        // Clear filtered students and students arrays after deleting all
+        setFilteredStudents([]);
+        setStudents([]);
+        await loadStudents(); // Re-fetch to ensure counts are correct if any were missed
         await loadClassStatistics();
       } catch (error) {
         showError('Failed to Delete', 'An error occurred while deleting students.');
+      } finally {
+        setDeletingAllStudents(false);
       }
     }
   };
@@ -310,12 +337,23 @@ const ClassList: React.FC = () => {
     );
     if (result.isConfirmed) {
       try {
+        Swal.fire({
+          title: 'Deleting Student',
+          text: 'Please wait...', 
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
         await studentService.deleteStudent(studentId);
+        Swal.close();
         showSuccess('Student Removed', `${studentName} has been removed from the class.`);
-        await loadStudents();
+        setFilteredStudents(prev => prev.filter(s => s.id !== studentId));
+        setStudents(prev => prev.filter(s => s.id !== studentId));
         await loadGrades();
         await loadClassStatistics();
       } catch (error) {
+        Swal.close();
         showError('Failed to Remove', 'An error occurred while removing the student.');
       }
     }
@@ -491,10 +529,21 @@ const ClassList: React.FC = () => {
 
   // View grade details
   const handleViewGrade = async (gradeId: string, gradeName: string) => {
+    if (!currentUser?.uid) return;
+    console.log(`[handleViewGrade] Setting loadingViewGradeId for grade: ${gradeId}`);
+    setLoadingViewGradeId(gradeId);
     try {
       const grade = await gradeService.getGradeById(gradeId);
-      const studentsInGrade = await gradeService.getStudentsInGrade(gradeId);
-      
+      const studentsInGradeSubcollection = await gradeService.getStudentsInGrade(gradeId);
+
+      // Get the latest main student list
+      const latestAllStudents = await studentService.getStudents(currentUser.uid);
+
+      // Filter students from subcollection to only include those present in the main student list
+      const validStudentsInGrade = studentsInGradeSubcollection.filter(sg => 
+        latestAllStudents.some(s => s.id === sg.studentId)
+      );
+
       if (grade) {
         await Swal.fire({
           title: gradeName,
@@ -502,11 +551,11 @@ const ClassList: React.FC = () => {
             <div class="text-left">
               <p class="mb-2"><strong>Description:</strong> ${grade.description}</p>
               <p class="mb-2"><strong>Age Range:</strong> ${grade.ageRange}</p>
-              <p class="mb-4"><strong>Total Students:</strong> ${grade.studentCount}</p>
+              <p class="mb-4"><strong>Total Students:</strong> ${validStudentsInGrade.length}</p>
               
               <h3 class="text-lg font-semibold mb-2">Students in this Grade:</h3>
               <div class="max-h-60 overflow-y-auto">
-                ${studentsInGrade.length > 0 ? `
+                ${validStudentsInGrade.length > 0 ? `
                   <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                       <tr>
@@ -515,7 +564,7 @@ const ClassList: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                      ${studentsInGrade.map(student => `
+                      ${validStudentsInGrade.map(student => `
                         <tr>
                           <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${student.name}</td>
                           <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
@@ -540,20 +589,19 @@ const ClassList: React.FC = () => {
           confirmButtonText: 'Close',
           showCancelButton: false,
           didOpen: () => {
-            // Add the remove student function to the window object
             (window as any).removeStudent = async (studentId: string) => {
               try {
                 await gradeService.removeStudentFromGrade(gradeId, studentId);
                 showSuccess('Student Removed', 'The student has been removed from the grade.');
-                // Refresh the view
                 handleViewGrade(gradeId, gradeName);
+                await loadStudents();
+                await loadGrades();
               } catch (error) {
                 showError('Failed to Remove', 'An error occurred while removing the student.');
               }
             };
           },
           willClose: () => {
-            // Clean up the window object
             delete (window as any).removeStudent;
           }
         });
@@ -563,12 +611,26 @@ const ClassList: React.FC = () => {
     } catch (error) {
       console.error('Error viewing grade:', error);
       showError('Error', 'Failed to load grade details.');
+    } finally {
+      console.log(`[handleViewGrade] Clearing loadingViewGradeId for grade: ${gradeId}`);
+      setLoadingViewGradeId(null);
     }
   };
 
   // Edit grade
   const handleEditGrade = async (gradeId: string, gradeName: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
+    console.log(`[handleEditGrade] Setting loadingEditGradeId for grade: ${gradeId}`);
+    setLoadingEditGradeId(gradeId);
+    try {
+      // Placeholder for edit grade logic
+      // In a real application, this would open a modal for editing or navigate to an edit page
+      showInfo('Edit Grade', `Editing grade: ${gradeName} (ID: ${gradeId})`);
+    } catch (error) {
+      showError('Failed to Edit Grade', 'An error occurred while trying to edit the grade.');
+    } finally {
+      console.log(`[handleEditGrade] Clearing loadingEditGradeId for grade: ${gradeId}`);
+      setLoadingEditGradeId(null);
+    }
   };
 
   // Delete grade
@@ -594,6 +656,7 @@ const ClassList: React.FC = () => {
 
   // Add new grade
   const handleAddGrade = async () => {
+    // Set loading state *after* preConfirm, just before API call
     try {
       const { value: formValues } = await Swal.fire({
         title: 'Create New Grade',
@@ -627,15 +690,13 @@ const ClassList: React.FC = () => {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Create Grade',
+        confirmButtonText: isCreatingGrade ? '<span class="loader-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 1s linear infinite;"></span> Creating...' : 'Create Grade',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
-        customClass: {
-          container: 'grade-modal',
-          popup: 'rounded-lg shadow-xl',
-          title: 'text-xl font-semibold text-gray-900',
-          confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md',
-          cancelButton: 'bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-md border border-gray-300'
+        allowOutsideClick: !isCreatingGrade,
+        didOpen: () => {
+          // SweetAlert2 handles enabling/disabling based on preConfirm and confirmButtonText.
+          // No need to manually enable/disable here.
         },
         preConfirm: () => {
           const gradeLevel = (document.getElementById('grade-level') as HTMLSelectElement).value;
@@ -646,7 +707,8 @@ const ClassList: React.FC = () => {
             Swal.showValidationMessage('Please fill in all required fields');
             return false;
           }
-
+          // Set loading state here, just before the form is confirmed and API call is expected
+          setIsCreatingGrade(true);
           return { 
             name: `${gradeLevel} - ${section}`,
             description,
@@ -686,6 +748,8 @@ const ClassList: React.FC = () => {
         title: 'Error',
         text: 'Failed to create grade. Please try again.'
       });
+    } finally {
+      setIsCreatingGrade(false);
     }
   };
 
@@ -851,48 +915,58 @@ const ClassList: React.FC = () => {
   };
 
   const handleAddStudentsToGrade = async (gradeId: string, gradeName: string) => {
-    // Show a form to add a new student to the selected grade
-    const { value: formValues } = await Swal.fire({
-      title: `Add Student to ${gradeName}`,
-      html: `
-        <div class="text-left p-4">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
-            <input id="student-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Juan Dela Cruz">
+    setLoadingAddStudentToGradeId(gradeId); // Set loading for the icon here
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: `Add Student to ${gradeName}`,
+        html: `
+          <div class="text-left p-4">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+              <input id="student-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Juan Dela Cruz">
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Reading Level</label>
+              <select id="student-reading-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Select reading level</option>
+                <option value="Independent">Independent</option>
+                <option value="Instructional">Instructional</option>
+                <option value="Frustrational">Frustrational</option>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Parent Name (optional)</label>
+              <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Maria Dela Cruz">
+            </div>
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Reading Level</label>
-            <select id="student-reading-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="">Select reading level</option>
-              <option value="Independent">Independent</option>
-              <option value="Instructional">Instructional</option>
-              <option value="Frustrational">Frustrational</option>
-            </select>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Parent Name (optional)</label>
-            <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Maria Dela Cruz">
-          </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Add',
-      cancelButtonText: 'Cancel',
-      focusConfirm: false,
-      preConfirm: () => {
-        const name = (document.getElementById('student-name') as HTMLInputElement).value.trim();
-        const readingLevel = (document.getElementById('student-reading-level') as HTMLSelectElement).value;
-        const parentName = (document.getElementById('student-parent-name') as HTMLInputElement).value.trim();
-        if (!name || !readingLevel) {
-          Swal.showValidationMessage('Please fill in all required fields');
-          return false;
+        `,
+        showCancelButton: true,
+        confirmButtonText: isAddingStudentToGrade ? '<span class="loader-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 1s linear infinite;"></span> Adding...' : 'Add',
+        cancelButtonText: 'Cancel',
+        focusConfirm: false,
+        allowOutsideClick: !isAddingStudentToGrade, // Disable outside clicks when loading
+        didOpen: () => {
+          // SweetAlert2 handles enabling/disabling based on preConfirm and confirmButtonText.
+          // No need to manually enable/disable here.
+        },
+        preConfirm: () => {
+          // This is for the modal's confirm button loading state
+          setIsAddingStudentToGrade(true);
+
+          const name = (document.getElementById('student-name') as HTMLInputElement).value.trim();
+          const readingLevel = (document.getElementById('student-reading-level') as HTMLSelectElement).value;
+          const parentName = (document.getElementById('student-parent-name') as HTMLInputElement).value.trim();
+          if (!name || !readingLevel) {
+            Swal.showValidationMessage('Please fill in all required fields');
+            setIsAddingStudentToGrade(false); // Reset if validation fails
+            return false;
+          }
+          return { name, readingLevel, parentName };
         }
-        return { name, readingLevel, parentName };
-      }
-    });
-    if (formValues) {
-      try {
-        // Add to main students collection
+      });
+
+      if (formValues) {
+        // Logic to add the student
         const newStudent = {
           name: formValues.name,
           grade: gradeName,
@@ -902,17 +976,22 @@ const ClassList: React.FC = () => {
           status: 'active' as const,
           teacherId: currentUser?.uid || '',
           parentName: formValues.parentName || '',
+          performance: 'Good' as Student['performance'],
         };
         const studentId = await studentService.addStudent(newStudent);
-        // Add to grade subcollection
         await gradeService.addStudentToGrade(gradeId, { studentId, name: formValues.name });
         showSuccess('Student Added', `${formValues.name} has been added to ${gradeName}.`);
         await loadStudents();
         await loadGrades();
         await loadClassStatistics();
-      } catch (err) {
-        showError('Failed to Add', 'An error occurred while adding the student.');
       }
+    } catch (err) {
+      showError('Failed to Add', 'An error occurred while adding the student.');
+    } finally {
+      // Ensure icon's loading state is reset, even if Swal.fire was dismissed without confirming
+      setLoadingAddStudentToGradeId(null);
+      // Ensure modal's loading state is reset too if not already
+      setIsAddingStudentToGrade(false);
     }
   };
 
@@ -929,6 +1008,28 @@ const ClassList: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Profile Completion Warning */}
+      {!isProfileComplete && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <i className="fas fa-exclamation-triangle text-yellow-400"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Profile Incomplete:</strong> Please complete your profile information to access all features. 
+                Missing fields: {userRole === 'teacher' ? 'Phone Number, School, Bio' : 
+                               userRole === 'parent' ? 'Phone Number, Grade Level' : 
+                               'Phone Number, School'}.
+                <a href="/profile" className="font-medium underline hover:text-yellow-600 ml-1">
+                  Update Profile
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 py-4">
         <div className="grid grid-cols-12 gap-4">
@@ -944,13 +1045,19 @@ const ClassList: React.FC = () => {
                         onClick={handleDeleteSelectedGrades}
                         className="inline-flex items-center p-1.5 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                         title={`Delete ${selectedGrades.length} selected grade(s)`}
+                        disabled={isDeletingSelectedGrades || !canManage}
                       >
-                        <i className="fas fa-trash text-sm"></i>
+                        {isDeletingSelectedGrades ? (
+                          <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #ffffff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                        ) : (
+                          <i className="fas fa-trash text-sm"></i>
+                        )}
                       </button>
                     )}
                     <button
                       onClick={handleAddGrade}
                       className="inline-flex items-center p-1.5 border border-transparent rounded-full shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      disabled={!canManage}
                     >
                       <i className="fas fa-plus text-sm"></i>
                     </button>
@@ -1000,8 +1107,13 @@ const ClassList: React.FC = () => {
                               }}
                               className="p-1 text-gray-400 hover:text-gray-600"
                               title="View Students"
+                              disabled={loadingViewGradeId === grade.id || !canManage}
                             >
-                              <i className="fas fa-eye"></i>
+                              {loadingViewGradeId === grade.id ? (
+                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <i className="fas fa-eye"></i>
+                              )}
                             </button>
                             <button
                               onClick={(e) => {
@@ -1010,8 +1122,13 @@ const ClassList: React.FC = () => {
                               }}
                               className="p-1 text-gray-400 hover:text-gray-600"
                               title="Add Students"
+                              disabled={loadingAddStudentToGradeId === grade.id || !canManage}
                             >
-                              <i className="fas fa-user-plus"></i>
+                              {loadingAddStudentToGradeId === grade.id ? (
+                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <i className="fas fa-user-plus"></i>
+                              )}
                             </button>
                             <button
                               onClick={(e) => {
@@ -1019,8 +1136,14 @@ const ClassList: React.FC = () => {
                                 grade.id && handleEditGrade(grade.id, grade.name);
                               }}
                               className="p-1 text-gray-400 hover:text-gray-600"
+                              title="Edit Grade"
+                              disabled={loadingEditGradeId === grade.id || !canManage}
                             >
-                              <i className="fas fa-edit"></i>
+                              {loadingEditGradeId === grade.id ? (
+                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <i className="fas fa-edit"></i>
+                              )}
                             </button>
                             <button
                               onClick={async (e) => {
@@ -1107,13 +1230,19 @@ const ClassList: React.FC = () => {
                   <button
                     onClick={handleDeleteAllStudents}
                     className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                    disabled={deletingAllStudents || !canManage}
                   >
-                    Delete All Students
+                    {deletingAllStudents ? (
+                      <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #e3342f', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    ) : (
+                      'Delete All Students'
+                    )}
                   </button>
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      disabled={!canManage}
                     >
                       <i className="fas fa-file-import mr-1.5"></i>
                       Import
@@ -1184,8 +1313,7 @@ const ClassList: React.FC = () => {
                                   onClick={() => student.id && handleLinkParent(student.id)}
                                   className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                 >
-                                  <i className="fas fa-link mr-1.5"></i>
-                                  Link Parent
+                                  <><i className="fas fa-link mr-1.5"></i>Link Parent</>
                                 </button>
                               )}
                             </div>
@@ -1201,20 +1329,31 @@ const ClassList: React.FC = () => {
                                 onClick={() => student.id && handleViewProfile(student.id)}
                                 className="text-blue-600 hover:text-blue-900"
                                 title="View Profile"
+                                disabled={loadingStudentId === student.id || !canManage}
                               >
-                                <i className="fas fa-eye"></i>
+                                {loadingStudentId === student.id ? (
+                                  <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                ) : (
+                                  <i className="fas fa-eye"></i>
+                                )}
                               </button>
                               <button
                                 onClick={() => student.id && handleEditStudent(student.id)}
                                 className="text-indigo-600 hover:text-indigo-900"
                                 title="Edit Student"
+                                disabled={loadingStudentId === student.id || !canManage}
                               >
-                                <i className="fas fa-edit"></i>
+                                {loadingStudentId === student.id ? (
+                                  <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                ) : (
+                                  <i className="fas fa-edit"></i>
+                                )}
                               </button>
                               <button
                                 onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
                                 className="text-red-600 hover:text-red-900"
                                 title="Delete Student"
+                                disabled={!canManage}
                               >
                                 <i className="fas fa-trash"></i>
                               </button>
@@ -1249,7 +1388,11 @@ const ClassList: React.FC = () => {
                   disabled={isImporting}
                   className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                 >
-                  {isImporting ? 'Importing...' : 'Import Students'}
+                  {isImporting ? (
+                    <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #ffffff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    'Import Students'
+                  )}
                 </button>
               </div>
             </div>

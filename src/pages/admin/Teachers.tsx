@@ -74,7 +74,7 @@ const Teachers: React.FC = () => {
     setActionLoading(true);
     try {
       await deleteTeacher(teacherId);
-      await fetchTeachers();
+      setTeachers(prev => prev.filter(t => t.id !== teacherId));
       alert('Teacher deleted successfully.');
     } catch (err) {
       alert('Failed to delete teacher.');
@@ -85,7 +85,7 @@ const Teachers: React.FC = () => {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Teachers</h1>
+     
       {loading ? (
         <div className="text-gray-500">Loading...</div>
       ) : error ? (
