@@ -1,176 +1,44 @@
-import { db } from '../config/firebase';
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  getDoc, 
-  doc, 
-  updateDoc, 
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp
-} from 'firebase/firestore';
-import { uploadPdf } from './cloudinaryService';
-import { getAuth } from 'firebase/auth';
+import type { Story } from '../types/Story';
+import axios from 'axios';
 
-export interface Story {
-  id?: string;
-  title: string;
-  description: string;
-  createdBy?: string; // User ID of the creator
-  language?: string;
-  pdfUrl: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-const storiesCollection = collection(db, 'stories');
-
-export const addStory = async (story: Omit<Story, 'id' | 'createdAt' | 'updatedAt' | 'pdfUrl'>, file: File): Promise<string> => {
-  try {
-    const now = new Date().toISOString();
-    
-    // Upload PDF to Cloudinary
-    const pdfUrl = await uploadPdf(file);
-
-    const storyData = {
-      ...story,
-      pdfUrl: pdfUrl,
-      createdAt: now,
-      updatedAt: now,
-      isActive: true
-    };
-    
-    const docRef = await addDoc(storiesCollection, storyData);
-    return docRef.id;
-  } catch (error) {
-    console.error('Error adding story:', error);
-    throw error;
-  }
-};
-
-export const getStories = async (filters?: { level?: string; category?: string; language?: string }): Promise<Story[]> => {
-  try {
-    let q = query(storiesCollection, where('isActive', '==', true));
-    
-    if (filters?.level) {
-      q = query(q, where('level', '==', filters.level));
-    }
-    
-    if (filters?.category) {
-      q = query(q, where('category', '==', filters.category));
-    }
-    
-    if (filters?.language) {
-      q = query(q, where('language', '==', filters.language));
-    }
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as Story));
-  } catch (error) {
-    console.error('Error getting stories:', error);
-    throw error;
-  }
-};
-
-export const getStoryById = async (id: string): Promise<Story | null> => {
-  try {
-    const docRef = doc(db, 'stories', id);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return {
-        id: docSnap.id,
-        ...docSnap.data()
-      } as Story;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting story:', error);
-    throw error;
-  }
-};
-
-export const updateStory = async (id: string, story: Partial<Story>): Promise<void> => {
-  try {
-    const docRef = doc(db, 'stories', id);
-    const updateData = {
-      ...story,
-      updatedAt: new Date().toISOString()
-    };
-    await updateDoc(docRef, updateData);
-  } catch (error) {
-    console.error('Error updating story:', error);
-    throw error;
-  }
-};
-
-export const deleteStory = async (id: string): Promise<void> => {
-  try {
-    const docRef = doc(db, 'stories', id);
-    await updateDoc(docRef, {
-      isActive: false,
-      updatedAt: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error deleting story:', error);
-    throw error;
-  }
-};
+const API_URL = '/api/stories';
 
 class StoryService {
-  private collectionName = 'stories';
-
-  async createStory(storyData: {
-    title: string;
-    description: string;
-    language?: string;
-    pdfUrl: string;
-  }): Promise<string> {
-    try {
-      const auth = getAuth();
-      if (!auth.currentUser) {
-        throw new Error('No authenticated user');
+  async createStory(formData: FormData): Promise<Story> {
+    const response = await axios.post(`${API_URL}/create`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-
-      const docRef = await addDoc(collection(db, this.collectionName), {
-        ...storyData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      return docRef.id;
-    } catch (error) {
-      console.error('Error creating story:', error);
-      throw new Error('Failed to create story');
-    }
+    });
+    return response.data;
   }
 
-  async updateStory(storyId: string, storyData: {
-    title?: string;
-    description?: string;
-    language?: string;
-    pdfUrl?: string;
-  }): Promise<void> {
-    try {
-      const docRef = doc(db, this.collectionName, storyId);
-      await updateDoc(docRef, {
-        ...storyData,
-        updatedAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error updating story:', error);
-      throw new Error('Failed to update story');
-    }
+  async getStoryById(id: string): Promise<Story> {
+    const response = await axios.get(`${API_URL}/${id}`);
+    return response.data;
   }
 
-  // ...existing code for other methods...
+  async getStories(options: { grade?: string; searchTerm?: string } = {}): Promise<Story[]> {
+    const response = await axios.get(API_URL, { params: options });
+    return response.data;
+  }
+
+  async updateStory(id: string, data: FormData): Promise<Story> {
+    const response = await axios.put(`${API_URL}/${id}`, data, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  }
+
+  async deleteStory(id: string): Promise<void> {
+    await axios.delete(`${API_URL}/${id}`);
+  }
+
+  getStoryPdfUrl(id: string): string {
+    return `${API_URL}/${id}/pdf`;
+  }
 }
 
-export const storyService = new StoryService();
-export default storyService;
+export const storyService = new StoryService(); 

@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { gradeService, type ClassGrade } from '../../services/gradeService';
 import { studentService, type Student } from '../../services/studentService';
 import { readingSessionService, type ReadingSession } from '../../services/readingSessionService';
-import { getStories, type Story } from '../../services/storyService';
+import { storyService } from '../../services/storyService';
+import type { Story } from '../../types/Story';
 import { useNavigate } from 'react-router-dom';
 import { 
   PlayIcon, 
@@ -37,8 +38,14 @@ const Reading: React.FC = () => {
     try {
       setStoriesLoading(true);
       setStoriesError(null);
-      const fetchedStories = await getStories({}); // Fetch all stories initially
-      setStories(fetchedStories);
+      const fetchedStories = await storyService.getStories({}); // Fetch all stories initially
+      // Map IStory[] to Story[] to ensure type compatibility
+      setStories(fetchedStories.map(story => ({
+        ...story,
+        _id: story._id?.toString(),
+        createdBy: story.createdBy?.toString?.() ?? story.createdBy,
+        language: story.language as 'english' | 'tagalog',
+      })));
     } catch (error) {
       console.error('Error loading stories:', error);
       setStoriesError('Failed to load stories. Please try again.');
@@ -631,7 +638,7 @@ const Reading: React.FC = () => {
               <div className="col-span-full text-center py-10 text-gray-500">No stories available.</div>
             ) : (
               stories.map((story) => (
-  <div key={story.id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
+  <div key={story._id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
     <div className="relative pb-[56.25%] bg-gray-200">
       {/* You might want to add a placeholder or actual cover image logic here if stories have one */}
       <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-lg">

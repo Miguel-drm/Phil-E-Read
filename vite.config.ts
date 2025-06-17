@@ -1,15 +1,29 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['pdfjs-dist']
+    include: ['multer-gridfs-storage']
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   build: {
     commonjsOptions: {
-      include: [/pdfjs-dist/]
+      include: [/node_modules/]
+    }
+  },
+  resolve: {
+    alias: {
+      // Add any necessary aliases here
     }
   }
 })

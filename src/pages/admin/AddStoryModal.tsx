@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { Story } from '../../services/storyService';
+import type { Story } from '../../types/Story';
 import Swal from 'sweetalert2'; // Import Swal for validation messages
 
 interface AddStoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (story: Omit<Story, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'isActive' | 'pdfUrl'>, file: File) => Promise<void>; // onSave now expects a file
+  onSave: (story: Omit<Story, '_id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'isActive' | 'pdfUrl'>, file: File) => Promise<void>; // onSave now expects a file
 }
 
 const AddStoryModal: React.FC<AddStoryModalProps> = ({

@@ -1,5 +1,76 @@
 import { db } from '../config/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:5000/api';
+
+export interface Story {
+  _id: string;
+  title: string;
+  description: string;
+  pdfUrl: string;
+  language: string;
+  createdBy: string;
+  isActive: boolean;
+  readingLevel?: string;
+  categories?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const storyApi = {
+  // Get all stories with optional filters
+  getStories: async (filters?: { readingLevel?: string; categories?: string[]; language?: string }) => {
+    const response = await axios.get(`${API_BASE_URL}/stories`, { params: filters });
+    return response.data;
+  },
+
+  // Search stories
+  searchStories: async (query: string) => {
+    const response = await axios.get(`${API_BASE_URL}/stories/search`, { params: { q: query } });
+    return response.data;
+  },
+
+  // Get a single story by ID
+  getStoryById: async (id: string) => {
+    const response = await axios.get(`${API_BASE_URL}/stories/${id}`);
+    return response.data;
+  },
+
+  // Download PDF
+  downloadPDF: async (id: string) => {
+    const response = await axios.get(`${API_BASE_URL}/stories/${id}/pdf`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  // Create a new story
+  createStory: async (storyData: FormData) => {
+    const response = await axios.post(`${API_BASE_URL}/stories`, storyData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  // Update a story
+  updateStory: async (id: string, storyData: FormData) => {
+    const response = await axios.put(`${API_BASE_URL}/stories/${id}`, storyData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  // Delete a story
+  deleteStory: async (id: string) => {
+    const response = await axios.delete(`${API_BASE_URL}/stories/${id}`);
+    return response.data;
+  }
+};
 
 export const getReadingSession = async (sessionId: string) => {
   try {

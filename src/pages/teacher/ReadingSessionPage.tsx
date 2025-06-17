@@ -1,19 +1,16 @@
 import React, {useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { readingSessionService, type ReadingSession } from '../../services/readingSessionService';
-import * as pdfjsLib from 'pdfjs-dist';
+import { storyService } from '../../services/storyService';
 import { ArrowLeftIcon, XCircleIcon, BookOpenIcon, UserGroupIcon, ClockIcon, ChartBarIcon, MicrophoneIcon, PlayIcon, PauseIcon, StopIcon } from '@heroicons/react/24/outline';
 
-// Configure the PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
 const ReadingSessionPage: React.FC = () => {
-  const [pdfText, setPdfText] = useState<string>('');
+  const [storyText, setStoryText] = useState<string>('');
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [currentSession, setCurrentSession] = useState<ReadingSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [currentWordIndex, setCurrentWordIndex] = useState<number>(0);
   const [words, setWords] = useState<string[]>([]);
@@ -38,6 +35,7 @@ const ReadingSessionPage: React.FC = () => {
     const fetchSession = async () => {
       if (!sessionId) {
         console.error('No session ID provided');
+        setError('No session ID provided');
         return;
       }
 
@@ -54,18 +52,64 @@ const ReadingSessionPage: React.FC = () => {
 
         setCurrentSession(sessionData);
 
-        // Use the storyUrl directly from the session data
-        if (sessionData.storyUrl) {
-          await loadPdfText(sessionData.storyUrl);
-        } else {
-          throw new Error('Session has no PDF file associated');
+        // Get all stories first
+        const stories = await storyService.getStories({});
+        console.log('All stories:', stories);
+
+        // Extract story title from the URL and find matching story
+        const storyTitle = sessionData.storyUrl
+          .split('/')
+          .pop()
+          ?.replace(/\.pdf$/, '')
+          ?.replace(/-/g, ' ');
+
+        console.log('Looking for story with title:', storyTitle);
+
+        const story = stories.find(s => 
+          s.title.toLowerCase() === storyTitle?.toLowerCase()
+        );
+
+        if (!story || !story._id) {
+          throw new Error('Story not found');
+        }
+
+        console.log('Found matching story:', story);
+
+        try {
+          // Get the full story details including text content
+          const fullStory = await storyService.getStoryById(story._id);
+          
+          if (!fullStory) {
+            throw new Error('Failed to fetch story details');
+          }
+
+          if (!fullStory.textContent || fullStory.textContent.trim().length === 0) {
+            console.error('Story has no text content:', fullStory);
+            throw new Error('Story text content is empty. Please ensure the PDF was properly processed during upload.');
+          }
+
+          // Set the story text and words
+          const cleanText = fullStory.textContent.trim();
+          setStoryText(cleanText);
+          const wordArray = cleanText.split(/\s+/).filter((word: string) => word.length > 0);
+          setWords(wordArray);
+          console.log('Text processing completed. Found', wordArray.length, 'words');
+        } catch (error) {
+          console.error('Error fetching story content:', error);
+          if (error instanceof Error) {
+            throw new Error(`Failed to load story content: ${error.message}`);
+          } else {
+            throw new Error('Failed to load story content: Unknown error');
+          }
         }
       } catch (error: any) {
         console.error('Error details:', {
           message: error.message,
           code: error.code,
+          stack: error.stack,
+          response: error.response?.data
         });
-        setPdfError(error.message);
+        setError(error.message);
       } finally {
         setIsLoading(false);
       }
@@ -74,26 +118,11 @@ const ReadingSessionPage: React.FC = () => {
     fetchSession();
   }, [sessionId]);
 
-  // Initialize PDF.js
-  useEffect(() => {
-    const setupPdfjs = async () => {
-      try {
-        // Import worker from CDN
-        pdfjsLib.GlobalWorkerOptions.workerSrc = await import('pdfjs-dist/build/pdf.worker.entry');
-      } catch (error) {
-        console.error('Failed to initialize PDF.js worker:', error);
-      }
-    };
-    setupPdfjs();
-  }, []);
-
-
-
   const handleGoBack = () => {
     navigate(-1);
   };
 
-  const renderPdfContent = () => {
+  const renderStoryContent = () => {
     if (isLoading) {
       return (
         <div className="flex justify-center items-center h-64">
@@ -102,11 +131,11 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (pdfError) {
+    if (error) {
       return (
         <div className="text-center p-8">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <div className="text-red-600 mb-4">{pdfError}</div>
+          <div className="text-red-600 mb-4">{error}</div>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -117,55 +146,27 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (!pdfText) {
+    if (!storyText) {
       return (
         <div className="text-center text-gray-600 p-8">
           <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p>No PDF content available</p>
+          <p>No story content available</p>
         </div>
       );
     }
 
     return (
-      <div className="pdf-container">
+      <div className="story-container">
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="prose max-w-none">
             <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-              {pdfText}
+              {storyText}
             </div>
           </div>
         </div>
       </div>
     );
   };
-
-  const loadPdfText = async (url: string) => {
-    try {
-      console.log('Loading PDF from URL:', url);
-      const loadingTask = pdfjsLib.getDocument(url);
-      const pdf = await loadingTask.promise;
-      console.log('PDF loaded successfully, pages:', pdf.numPages);
-      let fullText = '';
-      
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        console.log('Processing page', pageNum);
-        const page = await pdf.getPage(pageNum);
-        const content = await page.getTextContent();
-        const strings = content.items.map((item: any) => item.str);
-        fullText += strings.join(' ') + '\n\n';
-      }
-      
-      console.log('Text extracted successfully, length:', fullText.length);
-      setPdfText(fullText);
-      const wordArray = fullText.split(/\s+/).filter(word => word.length > 0);
-      setWords(wordArray);
-    } catch (error) {
-      console.error('Error loading PDF:', error);
-      console.error('Full error object:', error);
-      setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
-    }
-  };
-
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -365,8 +366,8 @@ const ReadingSessionPage: React.FC = () => {
                   <BookOpenIcon className="h-6 w-6 text-blue-600 mr-2" />
                   Story Content
                 </h3>
-                <div className="pdf-viewer-container">
-                  {renderPdfContent()}
+                <div className="story-viewer-container">
+                  {renderStoryContent()}
                 </div>
               </div>
             </div>
