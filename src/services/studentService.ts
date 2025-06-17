@@ -44,6 +44,10 @@ export interface ImportedStudent {
 class StudentService {
   private collectionName = 'students';
 
+  public getCollectionName(): string {
+    return this.collectionName;
+  }
+
   // Get all students for a teacher
   async getStudents(teacherId: string): Promise<Student[]> {
     try {
@@ -233,25 +237,50 @@ class StudentService {
     try {
       const batch = writeBatch(db);
       const studentIds: string[] = [];
-      
-      students.forEach((studentData) => {
-        const docRef = doc(collection(db, this.collectionName));
-        studentIds.push(docRef.id);
-        
-        batch.set(docRef, {
-          ...studentData,
-          attendance: 0,
-          performance: 'Good' as const,
-          lastAssessment: new Date().toISOString().split('T')[0],
-          status: 'pending' as const,
-          teacherId,
-          parentId: studentData.parentId || null,
-          parentName: studentData.parentName || null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-      });
-      
+
+      for (const studentData of students) {
+        // Try to find an existing student with the same name for this teacher
+        const q = query(
+          collection(db, this.collectionName),
+          where('teacherId', '==', teacherId),
+          where('name', '==', studentData.name), // Match by combined name
+          limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          // Student found, update it
+          const existingDoc = querySnapshot.docs[0];
+          const docRef = doc(db, this.collectionName, existingDoc.id);
+          batch.update(docRef, {
+            name: studentData.name, // Update combined name
+            grade: studentData.grade, // Update grade if changed
+            readingLevel: studentData.readingLevel, // Update reading level if changed
+            parentId: studentData.parentId || null, // Update parent info
+            parentName: studentData.parentName || null, // Update parent info
+            updatedAt: serverTimestamp()
+          });
+          studentIds.push(existingDoc.id);
+        } else {
+          // No existing student, add a new one
+          const docRef = doc(collection(db, this.collectionName));
+          studentIds.push(docRef.id);
+
+          batch.set(docRef, {
+            ...studentData,
+            attendance: 0,
+            performance: 'Good' as const,
+            lastAssessment: new Date().toISOString().split('T')[0],
+            status: 'active' as const, // Set as active upon import
+            teacherId,
+            parentId: studentData.parentId || null,
+            parentName: studentData.parentName || null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
       await batch.commit();
       return studentIds;
     } catch (error) {
@@ -392,6 +421,21 @@ class StudentService {
     } catch (error) {
       console.error('Error getting total students count:', error);
       throw new Error('Failed to fetch total students count');
+    }
+  }
+
+  // Get all students for a parent
+  async getStudentsByParent(parentId: string): Promise<Student[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('parentId', '==', parentId)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Student[];
+    } catch (error) {
+      console.error('Error getting students by parent:', error);
+      throw new Error('Failed to fetch students by parent');
     }
   }
 }

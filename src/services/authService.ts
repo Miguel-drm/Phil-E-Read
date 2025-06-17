@@ -26,6 +26,17 @@ export interface UserProfile {
   phoneNumber?: string;
   gradeLevel?: string;
   school?: string;
+  address?: string;
+  relationshipToChild?: string;
+  occupation?: string;
+  emergencyContactName?: string;
+  emergencyContactNumber?: string;
+  preferredContactMethod?: string;
+  alternateEmail?: string;
+  nationality?: string;
+  profilePhoto?: string;
+  languagesSpoken?: string;
+  notes?: string;
   isProfileComplete?: boolean;
 }
 
@@ -278,4 +289,11 @@ export const getTeachersCount = async (): Promise<number> => {
 // Get total count of parents
 export const getParentsCount = async (): Promise<number> => {
   return getUsersCountByRole('parent');
+};
+
+// Fetch all parents
+export const getAllParents = async () => {
+  const q = query(collection(db, 'users'), where('role', '==', 'parent'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }; 

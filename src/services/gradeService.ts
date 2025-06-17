@@ -27,8 +27,8 @@ export interface ClassGrade {
   studentCount: number;
   color: string; // e.g., "blue", "green", "yellow"
   isActive: boolean;
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
+  createdAt?: any;
+  updatedAt?: any;
   teacherId?: string; // To associate grades with specific teachers
 }
 
@@ -143,10 +143,31 @@ class GradeService {
   async updateGrade(gradeId: string, updateData: Partial<ClassGrade>): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, gradeId);
+      const gradeDoc = await getDoc(docRef);
+
+      if (!gradeDoc.exists()) {
+        throw new Error('Grade not found or no permission to access');
+      }
+
       await updateDoc(docRef, {
         ...updateData,
         updatedAt: serverTimestamp(),
       });
+
+      // If the grade name was updated, also update the grade name for all associated students
+      if (updateData.name) {
+        const currentStudentsInGrade = await this.getStudentsInGrade(gradeId);
+        if (currentStudentsInGrade.length > 0) {
+          const batch = writeBatch(db);
+
+          for (const studentRef of currentStudentsInGrade) {
+            // Update the 'grade' field in the main student collection
+            const studentDocRef = doc(db, StudentServiceModule.studentService.getCollectionName(), studentRef.studentId);
+            batch.update(studentDocRef, { grade: updateData.name });
+          }
+          await batch.commit();
+        }
+      }
     } catch (error) {
       console.error('Error updating grade:', error);
       throw new Error('Failed to update class grade');

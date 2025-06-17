@@ -5,6 +5,8 @@ import { gradeService, type ClassGrade } from '../../services/gradeService';
 import * as XLSX from 'xlsx';
 import { showInfo, showError, showSuccess, showConfirmation } from '../../services/alertService';
 import Swal from 'sweetalert2';
+import { serverTimestamp } from 'firebase/firestore';
+import { getAllParents } from '../../services/authService';
 
 const ClassList: React.FC = () => {
   const { currentUser, userRole, isProfileComplete } = useAuth();
@@ -44,6 +46,7 @@ const ClassList: React.FC = () => {
   // Load students on component mount
   useEffect(() => {
     if (currentUser?.uid) {
+      console.log('Current User UID:', currentUser.uid); // Add this line
       loadStudents();
       loadClassStatistics();
     }
@@ -174,12 +177,20 @@ const ClassList: React.FC = () => {
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          const students = jsonData.map((row: any) => ({
-            name: row.Name || row.name || '',
+          const students = jsonData.map((row: any) => {
+            const name = (row.Name || row.name || '').trim();
+            const surname = (row.Surname || row.surname || '').trim();
+            
+            // Combine name and surname with ' | ' separator
+            const fullName = [surname, name].filter(Boolean).join(' | ');
+
+            return {
+              name: fullName,
             grade: row.Grade || row.grade || '',
             readingLevel: String(row.ReadingLevel || row.readingLevel || '').replace('Level ', '').trim() as string,
             // parentId and parentName can be added here if available in import
-          }));
+            };
+          });
           resolve(students);
         } catch (error) {
           reject(error);
@@ -643,22 +654,6 @@ const ClassList: React.FC = () => {
     }
   };
 
-  // Edit grade
-  const handleEditGrade = async (gradeId: string, gradeName: string) => {
-    console.log(`[handleEditGrade] Setting loadingEditGradeId for grade: ${gradeId}`);
-    setLoadingEditGradeId(gradeId);
-    try {
-      // Placeholder for edit grade logic
-      // In a real application, this would open a modal for editing or navigate to an edit page
-      showInfo('Edit Grade', `Editing grade: ${gradeName} (ID: ${gradeId})`);
-    } catch (error) {
-      showError('Failed to Edit Grade', 'An error occurred while trying to edit the grade.');
-    } finally {
-      console.log(`[handleEditGrade] Clearing loadingEditGradeId for grade: ${gradeId}`);
-      setLoadingEditGradeId(null);
-    }
-  };
-
   // Delete grade
   const handleDeleteGrade = async (gradeId: string, gradeName: string) => {
     const result = await showConfirmation(
@@ -701,8 +696,6 @@ const ClassList: React.FC = () => {
               <label class="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
               <select id="grade-level" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 <option value="">Select grade level</option>
-                <option value="Grade 1">Grade 1</option>
-                <option value="Grade 2">Grade 2</option>
                 <option value="Grade 3">Grade 3</option>
                 <option value="Grade 4">Grade 4</option>
                 <option value="Grade 5">Grade 5</option>
@@ -880,17 +873,13 @@ const ClassList: React.FC = () => {
     await loadGrades();
   };
 
-  // Mock parent list (replace with real fetch in production)
-  const mockParents = [
-    { id: 'p1', name: 'John Smith', email: 'john.smith@email.com' },
-    { id: 'p2', name: 'Jane Doe', email: 'jane.doe@email.com' },
-    { id: 'p3', name: 'Michael Brown', email: 'michael.brown@email.com' },
-    { id: 'p4', name: 'Emily Johnson', email: 'emily.johnson@email.com' },
-  ];
-
   const handleLinkParent = async (studentId: string) => {
-    // Fetch parents (replace with real fetch if available)
-    const parents = mockParents;
+    // Fetch real parents from Firebase
+    const parents: { id: string; name: string; email: string }[] = (await getAllParents()).map((p: any) => ({
+      id: p.id,
+      name: p.displayName || p.name || '',
+      email: p.email || '',
+    }));
 
     let search = '';
     let filteredParents = parents;
@@ -902,13 +891,16 @@ const ClassList: React.FC = () => {
       );
       return `
         <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
-          <input id="swal-parent-search" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Search parent..." value="${searchValue}" style="margin-bottom:12px;" />
-          <div style="max-height:180px;overflow-y:auto;text-align:left;">
+          <input id="swal-parent-search" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3" placeholder="Search parent..." value="${searchValue}" />
+          <div style="max-height:220px;overflow-y:auto;">
             ${filteredParents.map(p => `
-              <div class="swal2-radio flex items-center mb-2">
-                <input type="radio" name="parent" value="${p.id}" id="parent-${p.id}" class="mr-2" />
-                <label for="parent-${p.id}" class="text-gray-900 cursor-pointer text-sm font-medium">${p.name} <span class="text-gray-500 text-xs">(${p.email})</span></label>
-              </div>
+              <label for="parent-${p.id}" class="flex items-center space-x-3 py-2 px-2 rounded-md hover:bg-blue-50 transition cursor-pointer mb-1">
+                <input type="radio" name="parent" value="${p.id}" id="parent-${p.id}" class="accent-blue-600" />
+                <div class="flex flex-col">
+                  <span class="font-semibold text-gray-900">${p.name}</span>
+                  <span class="text-xs text-gray-500">${p.email}</span>
+                </div>
+              </label>
             `).join('')}
           </div>
         </div>
@@ -1202,21 +1194,6 @@ const ClassList: React.FC = () => {
                               )}
                             </button>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                grade.id && handleEditGrade(grade.id, grade.name);
-                              }}
-                              className="p-1 text-gray-400 hover:text-gray-600"
-                              title="Edit Grade"
-                              disabled={loadingEditGradeId === grade.id || !canManage}
-                            >
-                              {loadingEditGradeId === grade.id ? (
-                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              ) : (
-                                <i className="fas fa-edit"></i>
-                              )}
-                            </button>
-                            <button
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 if (deletingGradeId === grade.id) return;
@@ -1358,12 +1335,56 @@ const ClassList: React.FC = () => {
                               <div className="flex-shrink-0 h-8 w-8">
                                 <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
                                   <span className="text-blue-600 font-medium text-sm">
-                                    {student.name.split(' ').map(n => n[0]).join('')}
+                                    {(() => {
+                                      const studentFullName = student.name || '';
+                                      let initial = '';
+
+                                      if (studentFullName.includes(' | ')) {
+                                          // New format: "Surname | Firstname"
+                                          const parts = studentFullName.split(' | ');
+                                          if (parts[0]) { // Surname part exists
+                                              initial = parts[0][0];
+                                          }
+                                      } else {
+                                          // Old format: could be "Firstname Surname" or just "Name"
+                                          const parts = studentFullName.trim().split(' ');
+                                          if (parts.length > 0) {
+                                              // Get the initial from the last part (assuming it's surname)
+                                              initial = parts[parts.length - 1][0];
+                                          }
+                                      }
+                                      return initial.toUpperCase();
+                                    })()}
                                   </span>
                                 </div>
                               </div>
                               <div className="ml-3">
-                                <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {(() => {
+                                    const studentFullName = student.name || '';
+                                    let surname = '';
+                                    let firstName = '';
+
+                                    if (studentFullName.includes(' | ')) {
+                                        // New format: "Surname | Firstname"
+                                        const parts = studentFullName.split(' | ');
+                                        surname = parts[0] || '';
+                                        firstName = parts[1] || '';
+                                    } else {
+                                        // Old format: "Firstname Surname" or just "Name"
+                                        const parts = studentFullName.trim().split(' ');
+                                        if (parts.length > 1) {
+                                            surname = parts[parts.length - 1]; // Last part is surname
+                                            firstName = parts.slice(0, -1).join(' '); // Rest is first name
+                                        } else {
+                                            firstName = parts[0] || ''; // If only one part, treat as first name
+                                            surname = ''; // No clear surname
+                                        }
+                                    }
+                                    // Combine them as "Surname Firstname"
+                                    return `${surname} ${firstName}`.trim();
+                                  })()}
+                                </div>
                               </div>
                             </div>
                           </td>
