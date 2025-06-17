@@ -1,20 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { getAllTeachers, updateTeacherProfile, deleteTeacher } from '../../services/authService';
+import EditTeacherDetailsModal from '../../components/admin/EditTeacherDetailsModal';
 
 interface Teacher {
   id: string;
   displayName?: string;
   email?: string;
+  phoneNumber?: string;
+  school?: string;
+  gradeLevel?: string;
 }
 
 const Teachers: React.FC = () => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editError, setEditError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
 
   const fetchTeachers = async () => {
     setLoading(true);
@@ -34,39 +37,18 @@ const Teachers: React.FC = () => {
   }, []);
 
   const handleEdit = (teacher: Teacher) => {
-    setEditingId(teacher.id);
-    setEditName(teacher.displayName || '');
-    setEditError('');
+    setSelectedTeacher(teacher);
+    setIsModalOpen(true);
   };
 
-  const handleEditSave = async (teacherId: string) => {
-    if (!editName.trim()) {
-      setEditError('Name is required.');
-      return;
-    }
-    if (editName.trim().length < 2) {
-      setEditError('Name must be at least 2 characters.');
-      return;
-    }
-    setActionLoading(true);
-    try {
-      await updateTeacherProfile(teacherId, { displayName: editName.trim() });
-      setEditingId(null);
-      setEditName('');
-      setEditError('');
-      await fetchTeachers();
-      alert('Teacher updated successfully.');
-    } catch (err) {
-      setEditError('Failed to update teacher.');
-    } finally {
-      setActionLoading(false);
-    }
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedTeacher(null);
   };
 
-  const handleEditCancel = () => {
-    setEditingId(null);
-    setEditName('');
-    setEditError('');
+  const handleSaveSuccess = async () => {
+    await fetchTeachers();
+    handleModalClose();
   };
 
   const handleDelete = async (teacherId: string) => {
@@ -95,75 +77,56 @@ const Teachers: React.FC = () => {
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-            <thead className="bg-gray-100">
+            <thead className="bg-gray-100 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">School</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Grade Level</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">Phone Number</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {teachers.map((teacher) => (
-                <tr key={teacher.id} className="hover:bg-blue-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === teacher.id ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={e => setEditName(e.target.value)}
-                          className="border rounded px-2 py-1 text-sm w-40"
-                          disabled={actionLoading}
-                        />
-                        {editError && <div className="text-xs text-red-500 mt-1">{editError}</div>}
-                      </>
-                    ) : (
-                      teacher.displayName || '-'
-                    )}
+                <tr key={teacher.id} className="hover:bg-blue-50 border-b border-gray-200 last:border-b-0">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                    {teacher.displayName || 'N/A'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{teacher.email || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">{teacher.email || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">{teacher.school || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">{teacher.gradeLevel || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">{teacher.phoneNumber || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    {editingId === teacher.id ? (
-                      <>
-                        <button
-                          onClick={() => handleEditSave(teacher.id)}
-                          className="mr-2 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                          disabled={actionLoading}
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={handleEditCancel}
-                          className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 text-xs"
-                          disabled={actionLoading}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleEdit(teacher)}
-                          className="mr-2 px-3 py-1 bg-yellow-400 text-white rounded hover:bg-yellow-500 text-xs"
-                          disabled={actionLoading}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(teacher.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
-                          disabled={actionLoading}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
+                    <button
+                      onClick={() => handleEdit(teacher)}
+                      className="mr-2 px-3 py-1 bg-yellow-400 text-white rounded hover:bg-yellow-500 text-xs"
+                      disabled={actionLoading}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(teacher.id)}
+                      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+                      disabled={actionLoading}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {selectedTeacher && (
+        <EditTeacherDetailsModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          teacher={selectedTeacher}
+          onSaveSuccess={handleSaveSuccess}
+        />
       )}
     </div>
   );

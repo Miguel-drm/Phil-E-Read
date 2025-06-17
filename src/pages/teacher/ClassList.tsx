@@ -20,7 +20,6 @@ const ClassList: React.FC = () => {
   const [classStats, setClassStats] = useState({
     totalStudents: 0,
     averageAttendance: 0,
-    averageReadingLevel: 0,
     excellentPerformers: 0
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,20 +79,23 @@ const ClassList: React.FC = () => {
   };
 
   const filterStudents = () => {
-    // Only show students if a class is selected
+    // If no grade is selected or 'all' is selected, filter students should be empty
     if (!selectedGrade || selectedGrade === 'all') {
       setFilteredStudents([]);
       return;
     }
-    // Get the selected grade object
+
     const gradeObj = grades.find(g => g.id === selectedGrade);
     if (!gradeObj) {
       setFilteredStudents([]);
       return;
     }
-    // Use the last loaded studentsInGrade from handleGradeSelect if available
-    // Otherwise, fallback to filtering by grade name (for safety)
-    let filtered = filteredStudents.length > 0 ? [...filteredStudents] : students.filter(student => String(student.grade) === gradeObj.name);
+
+    // Students shown are those from the main students array that are associated with the selected grade
+    let filtered = students.filter(student => 
+      student.grade === gradeObj.name // Assuming student.grade stores the grade name string
+    );
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(student => {
@@ -113,9 +115,10 @@ const ClassList: React.FC = () => {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'readingLevel-desc':
-          return String(b.readingLevel).localeCompare(String(a.readingLevel));
+          // Ensure readingLevel is treated as a number for comparison if possible, or string otherwise
+          return (Number(b.readingLevel) || 0) - (Number(a.readingLevel) || 0);
         case 'readingLevel-asc':
-          return String(a.readingLevel).localeCompare(String(b.readingLevel));
+          return (Number(a.readingLevel) || 0) - (Number(b.readingLevel) || 0);
         case 'attendance-desc':
           return b.attendance - a.attendance;
         case 'attendance-asc':
@@ -128,14 +131,6 @@ const ClassList: React.FC = () => {
     });
     setFilteredStudents(filtered);
   };
-
-  // Add useEffect to monitor searchQuery changes
-  useEffect(() => {
-    if (students.length > 0) {
-      console.log('Search query changed:', searchQuery);
-      filterStudents();
-    }
-  }, [searchQuery, selectedFilter, sortBy, students]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -182,7 +177,7 @@ const ClassList: React.FC = () => {
           const students = jsonData.map((row: any) => ({
             name: row.Name || row.name || '',
             grade: row.Grade || row.grade || '',
-            readingLevel: row.ReadingLevel || row.readingLevel || '',
+            readingLevel: String(row.ReadingLevel || row.readingLevel || '').replace('Level ', '').trim() as string,
             // parentId and parentName can be added here if available in import
           }));
           resolve(students);
@@ -215,29 +210,41 @@ const ClassList: React.FC = () => {
       });
       return;
     }
-    // Import students to main collection and add to selected class subcollection
-    await studentService.importStudents(
-      importedStudents.map(s => ({ ...s, grade: gradeObj.name })),
-      currentUser.uid
-    );
-    // Add each imported student to the selected class subcollection
-    // (Find the student in the main collection by name and grade)
-    const allStudents = await studentService.getStudents(currentUser.uid);
-    for (const imported of importedStudents) {
-      const match = allStudents.find(s => s.name === imported.name && String(s.grade) === String(gradeObj.name));
-      if (match && match.id) {
-        await gradeService.addStudentToGrade(selectedGrade, {
-          studentId: match.id,
-          name: match.name
-        });
+
+    setIsImporting(true);
+    try {
+      // Import students to main collection and add to selected class subcollection
+      await studentService.importStudents(
+        importedStudents.map(s => ({ ...s, grade: gradeObj.name })),
+        currentUser.uid
+      );
+      // Add each imported student to the selected class subcollection
+      // (Find the student in the main collection by name and grade)
+      const allStudents = await studentService.getStudents(currentUser.uid);
+      for (const imported of importedStudents) {
+        const match = allStudents.find(s => s.name === imported.name && String(s.grade) === String(gradeObj.name));
+        if (match && match.id) {
+          await gradeService.addStudentToGrade(selectedGrade, {
+            studentId: match.id,
+            name: match.name
+          });
+        }
       }
-    }
-    // Reload students and statistics
-    await loadStudents();
-    await loadClassStatistics();
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      // Reload students and statistics
+      await loadStudents();
+      await loadClassStatistics();
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      showSuccess('Import Complete', 'Students imported successfully!');
+    } catch (error) {
+      console.error('Error importing students:', error);
+      showError('Import Failed', 'An error occurred during student import. Please try again.');
+    } finally {
+      setIsImporting(false);
+      setShowImportPreview(false); // Close the preview modal after import attempt
+      setImportedStudents([]); // Clear imported students data
     }
   };
 
@@ -547,32 +554,41 @@ const ClassList: React.FC = () => {
       if (grade) {
         await Swal.fire({
           title: gradeName,
+          customClass: {
+            popup: 'rounded-xl shadow-2xl',
+            title: 'text-white text-xl font-semibold',
+            confirmButton: 'px-4 py-2 text-sm font-medium bg-blue-100 text-blue-700 rounded-lg shadow-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
+          },
+          backdrop: 'rgba(0,0,0,0.6)',
+          background: '#fff',
+          showCloseButton: true,
           html: `
-            <div class="text-left">
-              <p class="mb-2"><strong>Description:</strong> ${grade.description}</p>
-              <p class="mb-2"><strong>Age Range:</strong> ${grade.ageRange}</p>
-              <p class="mb-4"><strong>Total Students:</strong> ${validStudentsInGrade.length}</p>
+            <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
+              <p class="mb-3 text-gray-700"><strong>Description:</strong> ${grade.description}</p>
+              <p class="mb-3 text-gray-700"><strong>Age Range:</strong> ${grade.ageRange}</p>
+              <p class="mb-5 text-gray-700"><strong>Total Students:</strong> ${validStudentsInGrade.length}</p>
               
-              <h3 class="text-lg font-semibold mb-2">Students in this Grade:</h3>
-              <div class="max-h-60 overflow-y-auto">
+              <h3 class="text-lg font-semibold text-gray-800 mb-3">Students in this Grade:</h3>
+              <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg shadow-sm">
                 ${validStudentsInGrade.length > 0 ? `
-                  <table class="min-w-full divide-y divide-gray-200">
+                  <table class="min-w-full divide-y divide-gray-100">
                     <thead class="bg-gray-50">
                       <tr>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="bg-white divide-y divide-gray-100">
                       ${validStudentsInGrade.map(student => `
-                        <tr>
-                          <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${student.name}</td>
-                          <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                        <tr class="hover:bg-blue-50 transition-colors duration-150">
+                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name}</td>
+                          <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onclick="window.removeStudent('${student.studentId}')"
-                              class="text-red-600 hover:text-red-900"
+                              class="text-red-600 hover:text-red-900 transition-colors duration-150 p-1"
+                              title="Remove Student"
                             >
-                              Remove
+                              <i class="fas fa-user-minus"></i>
                             </button>
                           </td>
                         </tr>
@@ -580,7 +596,10 @@ const ClassList: React.FC = () => {
                     </tbody>
                   </table>
                 ` : `
-                  <p class="text-gray-500 italic">No students in this grade yet.</p>
+                  <div class="p-4 text-center text-gray-500 italic">
+                    <i class="fas fa-info-circle text-lg mb-2"></i>
+                    <p>No students in this grade yet.</p>
+                  </div>
                 `}
               </div>
             </div>
@@ -588,18 +607,25 @@ const ClassList: React.FC = () => {
           showConfirmButton: true,
           confirmButtonText: 'Close',
           showCancelButton: false,
-          didOpen: () => {
+          didOpen: (modalElement) => {
             (window as any).removeStudent = async (studentId: string) => {
               try {
                 await gradeService.removeStudentFromGrade(gradeId, studentId);
                 showSuccess('Student Removed', 'The student has been removed from the grade.');
-                handleViewGrade(gradeId, gradeName);
+                handleViewGrade(gradeId, gradeName); // Re-open modal to refresh student list
                 await loadStudents();
                 await loadGrades();
               } catch (error) {
                 showError('Failed to Remove', 'An error occurred while removing the student.');
               }
             };
+            // Adjust title bar background if needed
+            const title = modalElement.querySelector('.swal2-title') as HTMLElement;
+            if (title) {
+              title.style.background = '#34495E'; // Solid dark blue color provided by user
+              title.style.padding = '1rem 1.5rem';
+              title.style.borderRadius = '0.75rem 0.75rem 0 0';
+            }
           },
           willClose: () => {
             delete (window as any).removeStudent;
@@ -660,11 +686,20 @@ const ClassList: React.FC = () => {
     try {
       const { value: formValues } = await Swal.fire({
         title: 'Create New Grade',
+        customClass: {
+          popup: 'rounded-xl shadow-2xl',
+          title: 'text-white text-xl font-semibold',
+          confirmButton: 'px-4 py-2 text-sm font-medium bg-blue-100 text-blue-700 rounded-lg shadow-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
+          cancelButton: 'px-4 py-2 text-sm font-medium bg-white text-gray-700 rounded-lg shadow-md hover:bg-gray-100 transition-all duration-200',
+        },
+        backdrop: 'rgba(0,0,0,0.6)',
+        background: '#fff',
+        showCloseButton: true,
         html: `
-          <div class="text-left p-4">
+          <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
             <div class="mb-6">
               <label class="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
-              <select id="grade-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <select id="grade-level" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 <option value="">Select grade level</option>
                 <option value="Grade 1">Grade 1</option>
                 <option value="Grade 2">Grade 2</option>
@@ -676,13 +711,13 @@ const ClassList: React.FC = () => {
             </div>
             <div class="mb-6">
               <label class="block text-sm font-medium text-gray-700 mb-2">Section</label>
-              <input id="grade-section" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Athena" />
+              <input id="grade-section" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., Athena" />
             </div>
             <div class="mb-6">
               <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea 
-                id="grade-description" 
-                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+              <textarea
+                id="grade-description"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., First grade students"
                 rows="2"
               ></textarea>
@@ -690,13 +725,20 @@ const ClassList: React.FC = () => {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isCreatingGrade ? '<span class="loader-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 1s linear infinite;"></span> Creating...' : 'Create Grade',
+        confirmButtonText: isCreatingGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-white border-solid rounded-full animate-spin"></span> Creating...' : 'Create Grade',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
         allowOutsideClick: !isCreatingGrade,
-        didOpen: () => {
+        didOpen: (modalElement) => {
           // SweetAlert2 handles enabling/disabling based on preConfirm and confirmButtonText.
           // No need to manually enable/disable here.
+          // Adjust title bar background if needed
+          const title = modalElement.querySelector('.swal2-title') as HTMLElement;
+          if (title) {
+            title.style.background = '#34495E'; // Solid dark blue color provided by user
+            title.style.padding = '1rem 1.5rem';
+            title.style.borderRadius = '0.75rem 0.75rem 0 0';
+          }
         },
         preConfirm: () => {
           const gradeLevel = (document.getElementById('grade-level') as HTMLSelectElement).value;
@@ -709,7 +751,7 @@ const ClassList: React.FC = () => {
           }
           // Set loading state here, just before the form is confirmed and API call is expected
           setIsCreatingGrade(true);
-          return { 
+          return {
             name: `${gradeLevel} - ${section}`,
             description,
             ageRange: "6-12 years", // Default age range
@@ -726,11 +768,11 @@ const ClassList: React.FC = () => {
           studentCount: 0,
           color: formValues.color,
           isActive: true,
-          teacherId: "default" // This should come from auth context
+          teacherId: currentUser?.uid || "default" // Use current user ID
         };
 
         await gradeService.createGrade(gradeData);
-        
+
         await Swal.fire({
           icon: 'success',
           title: 'Grade Created!',
@@ -859,20 +901,31 @@ const ClassList: React.FC = () => {
         p.email.toLowerCase().includes(searchValue.toLowerCase())
       );
       return `
-        <input id="swal-parent-search" class="swal2-input" placeholder="Search parent..." value="${searchValue}" style="margin-bottom:8px;" />
-        <div style="max-height:180px;overflow-y:auto;text-align:left;">
-          ${filteredParents.map(p => `
-            <div class="swal2-radio" style="margin-bottom:4px;">
-              <input type="radio" name="parent" value="${p.id}" id="parent-${p.id}" />
-              <label for="parent-${p.id}" style="margin-left:6px;cursor:pointer;">${p.name} <span style="color:#888;font-size:12px;">(${p.email})</span></label>
-            </div>
-          `).join('')}
+        <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
+          <input id="swal-parent-search" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Search parent..." value="${searchValue}" style="margin-bottom:12px;" />
+          <div style="max-height:180px;overflow-y:auto;text-align:left;">
+            ${filteredParents.map(p => `
+              <div class="swal2-radio flex items-center mb-2">
+                <input type="radio" name="parent" value="${p.id}" id="parent-${p.id}" class="mr-2" />
+                <label for="parent-${p.id}" class="text-gray-900 cursor-pointer text-sm font-medium">${p.name} <span class="text-gray-500 text-xs">(${p.email})</span></label>
+              </div>
+            `).join('')}
+          </div>
         </div>
       `;
     };
 
     await Swal.fire({
       title: 'Link Parent',
+      customClass: {
+        popup: 'rounded-xl shadow-2xl',
+        title: 'text-white text-xl font-semibold',
+        confirmButton: 'px-4 py-2 text-sm font-medium bg-blue-100 text-blue-700 rounded-lg shadow-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
+        cancelButton: 'px-4 py-2 text-sm font-medium bg-white text-gray-700 rounded-lg shadow-md hover:bg-gray-100 transition-all duration-200',
+      },
+      backdrop: 'rgba(0,0,0,0.6)',
+      background: '#fff',
+      showCloseButton: true,
       html: renderParentList(''),
       showCancelButton: true,
       confirmButtonText: 'Link',
@@ -886,7 +939,7 @@ const ClassList: React.FC = () => {
         }
         return selected;
       },
-      didOpen: () => {
+      didOpen: (modalElement) => {
         const input = Swal.getPopup()?.querySelector('#swal-parent-search') as HTMLInputElement;
         if (input) {
           input.focus();
@@ -894,6 +947,13 @@ const ClassList: React.FC = () => {
             const value = (e.target as HTMLInputElement).value;
             Swal.update({ html: renderParentList(value) });
           });
+        }
+        // Adjust title bar background if needed
+        const title = modalElement.querySelector('.swal2-title') as HTMLElement;
+        if (title) {
+          title.style.background = '#34495E'; // Solid dark blue color provided by user
+          title.style.padding = '1rem 1.5rem';
+          title.style.borderRadius = '0.75rem 0.75rem 0 0';
         }
       },
     }).then(async (result) => {
@@ -919,15 +979,24 @@ const ClassList: React.FC = () => {
     try {
       const { value: formValues } = await Swal.fire({
         title: `Add Student to ${gradeName}`,
+        customClass: {
+          popup: 'rounded-xl shadow-2xl',
+          title: 'text-white text-xl font-semibold',
+          confirmButton: 'px-4 py-2 text-sm font-medium bg-blue-100 text-blue-700 rounded-lg shadow-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
+          cancelButton: 'px-4 py-2 text-sm font-medium bg-white text-gray-700 rounded-lg shadow-md hover:bg-gray-100 transition-all duration-200',
+        },
+        backdrop: 'rgba(0,0,0,0.6)',
+        background: '#fff',
+        showCloseButton: true,
         html: `
-          <div class="text-left p-4">
+          <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
-              <input id="student-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Juan Dela Cruz">
+              <input id="student-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., Juan Dela Cruz">
             </div>
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">Reading Level</label>
-              <select id="student-reading-level" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <select id="student-reading-level" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 <option value="">Select reading level</option>
                 <option value="Independent">Independent</option>
                 <option value="Instructional">Instructional</option>
@@ -936,18 +1005,25 @@ const ClassList: React.FC = () => {
             </div>
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">Parent Name (optional)</label>
-              <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Maria Dela Cruz">
+              <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., Maria Dela Cruz">
             </div>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isAddingStudentToGrade ? '<span class="loader-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 1s linear infinite;"></span> Adding...' : 'Add',
+        confirmButtonText: isAddingStudentToGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-white border-solid rounded-full animate-spin"></span> Adding...' : 'Add',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
-        allowOutsideClick: !isAddingStudentToGrade, // Disable outside clicks when loading
-        didOpen: () => {
+        allowOutsideClick: !isAddingStudentToGrade,
+        didOpen: (modalElement) => {
           // SweetAlert2 handles enabling/disabling based on preConfirm and confirmButtonText.
           // No need to manually enable/disable here.
+          // Adjust title bar background if needed
+          const title = modalElement.querySelector('.swal2-title') as HTMLElement;
+          if (title) {
+            title.style.background = '#34495E'; // Solid dark blue color provided by user
+            title.style.padding = '1rem 1.5rem';
+            title.style.borderRadius = '0.75rem 0.75rem 0 0';
+          }
         },
         preConfirm: () => {
           // This is for the modal's confirm button loading state
@@ -1018,10 +1094,8 @@ const ClassList: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
                 <strong>Profile Incomplete:</strong> Please complete your profile information to access all features. 
-                Missing fields: {userRole === 'teacher' ? 'Phone Number, School, Bio' : 
-                               userRole === 'parent' ? 'Phone Number, Grade Level' : 
-                               'Phone Number, School'}.
-                <a href="/profile" className="font-medium underline hover:text-yellow-600 ml-1">
+                Missing fields: {userRole === 'teacher' ? 'Phone Number, School' : userRole === 'parent' ? 'Phone Number, Grade Level' : 'Phone Number, School'}.
+                <a href="/teacher/profile" className="font-medium underline hover:text-yellow-600 ml-1">
                   Update Profile
                 </a>
               </p>
@@ -1093,9 +1167,6 @@ const ClassList: React.FC = () => {
                           </div>
                           <div className="flex items-center space-x-2">
                             <span className="text-sm font-medium text-gray-900">{grade.name}</span>
-                            <span className={`ml-2 px-1.5 py-0.5 rounded-full text-xs font-medium ${getBadgeColorClasses(grade.color)}`}>
-                              {grade.studentCount || 0} students
-                            </span>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -1372,55 +1443,63 @@ const ClassList: React.FC = () => {
 
       {/* Import Preview Modal */}
       {showImportPreview && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col pointer-events-auto">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">Import Preview</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none bg-black bg-opacity-60">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col pointer-events-auto overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-[#34495E] rounded-t-xl">
+              <h3 className="text-lg font-semibold text-white">Import Preview</h3>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={handleCancelImport}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900"
+                  className="px-4 py-2 text-sm font-medium text-white bg-transparent border border-white rounded-lg hover:bg-white hover:text-blue-600 transition-all duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleImportStudents}
                   disabled={isImporting}
-                  className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-white rounded-lg shadow-md hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {isImporting ? (
-                    <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #ffffff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <span className="inline-flex items-center"><span className="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-blue-600 border-solid rounded-full animate-spin"></span> Importing...</span>
                   ) : (
                     'Import Students'
                   )}
                 </button>
               </div>
             </div>
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">
-                Found {importedStudents.length} students to import. Please review the data below:
+            <div className="p-4 flex items-center bg-gray-50 border-b border-gray-200">
+              <i className="fas fa-info-circle text-blue-500 mr-3 text-lg"></i>
+              <p className="text-sm text-gray-700">
+                Found {importedStudents.length} students to import. Please review the data below.
               </p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto flex-1">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reading Level</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Grade</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Reading Level</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-100">
                   {importedStudents.map((student, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{student.grade}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Level {student.readingLevel}</td>
+                    <tr key={index} className="hover:bg-blue-50 transition-colors duration-150">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.grade}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.readingLevel}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {importedStudents.length === 0 && (
+              <div className="p-6 text-center text-gray-500 italic bg-white">
+                <i className="fas fa-file-excel text-4xl mb-4 text-gray-300"></i>
+                <p>No student data to preview.</p>
+                <p className="text-xs mt-2">Please upload a valid .xlsx, .xls, or .csv file.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

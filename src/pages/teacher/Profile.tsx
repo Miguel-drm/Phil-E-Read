@@ -24,7 +24,6 @@ const Profile: React.FC = () => {
     phoneNumber: '',
     school: '',
     gradeLevel: '',
-    bio: ''
   });
 
   const [preferences, setPreferences] = useState({
@@ -54,7 +53,6 @@ const Profile: React.FC = () => {
         phoneNumber: userProfile.phoneNumber || '',
         school: userProfile.school || '',
         gradeLevel: userProfile.gradeLevel || '',
-        bio: userProfile.bio || ''
       });
     }
   }, [userProfile]);
@@ -68,13 +66,12 @@ const Profile: React.FC = () => {
         phoneNumber: profileData.phoneNumber,
         school: profileData.school,
         gradeLevel: profileData.gradeLevel,
-        bio: profileData.bio
       });
-      
+    
       // Refresh the user profile to get updated data
       await refreshUserProfile();
       
-      setIsEditing(false);
+    setIsEditing(false);
       showSuccess('Profile Updated', 'Your profile has been updated successfully!');
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -360,19 +357,6 @@ const Profile: React.FC = () => {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                 />
               </div>
-            </div>
-            
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bio
-              </label>
-              <textarea
-                rows={4}
-                value={profileData.bio}
-                onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
-                disabled={!isEditing}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-              ></textarea>
             </div>
           </div>
         </div>

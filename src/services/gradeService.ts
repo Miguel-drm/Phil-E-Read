@@ -12,10 +12,12 @@ import {
   Timestamp,
   serverTimestamp,
   collectionGroup,
-  writeBatch
+  writeBatch,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
+import * as StudentServiceModule from './studentService'; // Import as a namespace
 
 export interface ClassGrade {
   id?: string;
@@ -357,6 +359,34 @@ class GradeService {
       throw new Error('Failed to check if student is in grade');
     }
   }
+
+  async getAllClassGrades(): Promise<ClassGrade[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ClassGrade[];
+    } catch (error) {
+      console.error('Error getting all class grades:', error);
+      throw new Error('Failed to fetch all class grades');
+    }
+  }
+
+  async getStudentsByGrade(gradeId: string): Promise<StudentServiceModule.Student[]> {
+    try {
+      const studentsCollectionRef = collection(db, this.collectionName, gradeId, 'students');
+      const querySnapshot = await getDocs(studentsCollectionRef);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as StudentServiceModule.Student[];
+    } catch (error) {
+      console.error(`Error getting students for grade ${gradeId}:`, error);
+      throw new Error(`Failed to fetch students for grade ${gradeId}`);
+    }
+  }
 }
 
 export const gradeService = new GradeService();
+export default gradeService;

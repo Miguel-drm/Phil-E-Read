@@ -11,7 +11,8 @@ import {
   orderBy, 
   limit,
   writeBatch,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
@@ -20,7 +21,7 @@ export interface Student {
   id?: string;
   name: string;
   grade: string;
-  readingLevel: number;
+  readingLevel: string;
   attendance: number;
   performance: 'Excellent' | 'Good' | 'Needs Improvement';
   lastAssessment: string;
@@ -35,7 +36,7 @@ export interface Student {
 export interface ImportedStudent {
   name: string;
   grade: string;
-  readingLevel: number;
+  readingLevel: string;
   parentId?: string;
   parentName?: string;
 }
@@ -322,7 +323,6 @@ class StudentService {
   async getClassStatistics(teacherId: string): Promise<{
     totalStudents: number;
     averageAttendance: number;
-    averageReadingLevel: number;
     excellentPerformers: number;
   }> {
     try {
@@ -332,7 +332,6 @@ class StudentService {
         return {
           totalStudents: 0,
           averageAttendance: 0,
-          averageReadingLevel: 0,
           excellentPerformers: 0
         };
       }
@@ -341,9 +340,6 @@ class StudentService {
       const averageAttendance = Math.round(
         students.reduce((sum, student) => sum + student.attendance, 0) / totalStudents
       );
-      const averageReadingLevel = Math.round(
-        (students.reduce((sum, student) => sum + student.readingLevel, 0) / totalStudents) * 10
-      ) / 10;
       const excellentPerformers = students.filter(
         student => student.performance === 'Excellent'
       ).length;
@@ -351,7 +347,6 @@ class StudentService {
       return {
         totalStudents,
         averageAttendance,
-        averageReadingLevel,
         excellentPerformers
       };
     } catch (error) {
@@ -379,21 +374,24 @@ class StudentService {
 
   // Get all students (admin use)
   async getAllStudents(): Promise<Student[]> {
-    console.log("getAllStudents called");
     try {
       const querySnapshot = await getDocs(collection(db, this.collectionName));
-      console.log("querySnapshot size:", querySnapshot.size);
-      const students: Student[] = [];
-      querySnapshot.forEach((doc) => {
-        students.push({
-          id: doc.id,
-          ...doc.data()
-        } as Student);
-      });
-      return students;
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Student[];
     } catch (error) {
       console.error('Error getting all students:', error);
       throw new Error('Failed to fetch all students');
+    }
+  }
+
+  // Get total count of all students
+  async getTotalStudentsCount(): Promise<number> {
+    try {
+      const q = query(collection(db, this.collectionName));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size;
+    } catch (error) {
+      console.error('Error getting total students count:', error);
+      throw new Error('Failed to fetch total students count');
     }
   }
 }

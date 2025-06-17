@@ -1,40 +1,67 @@
 import React, { useEffect, useState } from 'react';
-import { studentService, type Student } from '../../services/studentService';
+import * as StudentServiceModule from '../../services/studentService'; // Import as a namespace
+import { gradeService, type ClassGrade } from '../../services/gradeService';
 
 const Students: React.FC = () => {
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<StudentServiceModule.Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [grades, setGrades] = useState<ClassGrade[]>([]);
+  const [selectedGradeId, setSelectedGradeId] = useState<string | 'all' | ''>('all');
 
   useEffect(() => {
-    console.log("Students useEffect running");
-    const fetchStudents = async () => {
+    const fetchInitialData = async () => {
       setLoading(true);
       setError(null);
       try {
-        console.log("Calling getAllStudents...");
-        const allStudents = await studentService.getAllStudents();
-        console.log("Fetched students:", allStudents);
-        setStudents(allStudents);
+        const allGrades = await gradeService.getAllClassGrades();
+        setGrades(allGrades);
+
+        if (selectedGradeId === 'all') {
+          const allStudents = await StudentServiceModule.studentService.getAllStudents();
+          setStudents(allStudents);
+        } else if (selectedGradeId) {
+          const studentsInGrade = await gradeService.getStudentsByGrade(selectedGradeId);
+          setStudents(studentsInGrade);
+        }
       } catch (err) {
-        setError('Failed to load students.');
-        console.error('Error loading students:', err);
+        setError('Failed to load data.');
+        console.error('Error loading data:', err);
       } finally {
         setLoading(false);
       }
     };
-    fetchStudents();
-  }, []);
+    fetchInitialData();
+  }, [selectedGradeId]);
+
+  const handleGradeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedGradeId(e.target.value);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 py-4">
         <div className="bg-white rounded-lg shadow h-[calc(100vh-6rem)] flex flex-col">
           <div className="px-3 py-3 border-b border-gray-200 sm:px-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Students</h3>
-            <span className="px-2 py-1 text-sm font-medium text-gray-600 bg-gray-100 rounded-full">
-              {students.length} students
-            </span>
+            <h3 className="text-lg font-semibold text-gray-900">Grades and Sections</h3>
+            <div className="flex items-center space-x-4">
+              <select
+                value={selectedGradeId}
+                onChange={handleGradeChange}
+                className="border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                disabled={loading}
+              >
+                <option value="all">All Grades</option>
+                {grades.map((grade) => (
+                  <option key={grade.id} value={grade.id}>
+                    {grade.name}
+                  </option>
+                ))}
+              </select>
+              <span className="px-2 py-1 text-sm font-medium text-gray-600 bg-gray-100 rounded-full">
+                {students.length} students
+              </span>
+            </div>
           </div>
           <div className="flex-1 overflow-auto">
             {loading ? (
@@ -65,7 +92,7 @@ const Students: React.FC = () => {
                 </tbody>
               </table>
             ) : (
-              <div className="text-gray-500 p-8">No students found.</div>
+              <div className="text-gray-500 p-8">No students found for this grade/section.</div>
             )}
           </div>
         </div>

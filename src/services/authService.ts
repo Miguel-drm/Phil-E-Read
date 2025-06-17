@@ -26,7 +26,6 @@ export interface UserProfile {
   phoneNumber?: string;
   gradeLevel?: string;
   school?: string;
-  bio?: string;
   isProfileComplete?: boolean;
 }
 
@@ -120,8 +119,7 @@ export const isProfileComplete = (profile: UserProfile): boolean => {
   if (profile.role === 'teacher') {
     return hasBasicInfo && 
            Boolean(profile.phoneNumber) && 
-           Boolean(profile.school) && 
-           Boolean(profile.bio);
+           Boolean(profile.school);
   } else if (profile.role === 'parent') {
     return hasBasicInfo && 
            Boolean(profile.phoneNumber) && 
@@ -139,13 +137,23 @@ export const isProfileComplete = (profile: UserProfile): boolean => {
 export const updateUserProfile = async (updates: UserProfile): Promise<void> => {
   try {
     if (auth.currentUser) {
-      await updateProfile(auth.currentUser, updates);
+      const authUpdates: { displayName?: string, photoURL?: string } = {};
+      if (updates.displayName !== undefined) {
+        authUpdates.displayName = updates.displayName;
+      }
+      if (updates.photoURL !== undefined) {
+        authUpdates.photoURL = updates.photoURL;
+      }
+
+      if (Object.keys(authUpdates).length > 0) {
+        await updateProfile(auth.currentUser, authUpdates);
+      }
       
       // Check if profile is complete after updates
       const updatedProfile = { ...updates };
       const isComplete = isProfileComplete(updatedProfile);
       
-      // Update user document in Firestore with completion status
+      // Update user document in Firestore with completion status and other fields
       await setDoc(doc(db, 'users', auth.currentUser.uid), {
         ...updates,
         isProfileComplete: isComplete,
@@ -178,11 +186,18 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
         createdAt: new Date().toISOString()
       });
       
-      return {
+      const initialProfile: UserProfile = {
         displayName: user.displayName || undefined,
         email: user.email || undefined,
         photoURL: user.photoURL || undefined,
-        role: role
+        role: role,
+        phoneNumber: '',
+        gradeLevel: '',
+        school: '',
+      };
+      return {
+        ...initialProfile,
+        isProfileComplete: isProfileComplete(initialProfile),
       };
     }
     
@@ -190,15 +205,26 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
       displayName: user.displayName || userData.displayName || undefined,
       email: user.email || undefined,
       photoURL: user.photoURL || undefined,
-      role: userData.role || determineUserRole(user.email || '')
+      role: userData.role || determineUserRole(user.email || ''),
+      phoneNumber: String(userData.phoneNumber || ''),
+      gradeLevel: String(userData.gradeLevel || ''),
+      school: String(userData.school || ''),
+      isProfileComplete: Boolean(userData.isProfileComplete || false),
     };
   } catch (error) {
     console.error('Error fetching user profile:', error);
-    return {
+    const defaultProfile: UserProfile = {
       displayName: user.displayName || undefined,
       email: user.email || undefined,
       photoURL: user.photoURL || undefined,
-      role: determineUserRole(user.email || '')
+      role: determineUserRole(user.email || ''),
+      phoneNumber: '',
+      gradeLevel: '',
+      school: '',
+    };
+    return {
+      ...defaultProfile,
+      isProfileComplete: isProfileComplete(defaultProfile),
     };
   }
 };
@@ -213,7 +239,12 @@ export const getAllTeachers = async (schoolId?: string) => {
 };
 
 // Update any teacher's profile by ID (admin only)
-export const updateTeacherProfile = async (teacherId: string, updates: { displayName?: string }) => {
+export const updateTeacherProfile = async (teacherId: string, updates: {
+  displayName?: string;
+  phoneNumber?: string | null;
+  school?: string | null;
+  gradeLevel?: string | null;
+}) => {
   if (!teacherId) throw new Error('No teacher ID provided');
   await updateDoc(doc(db, 'users', teacherId), updates);
 };
@@ -222,4 +253,29 @@ export const updateTeacherProfile = async (teacherId: string, updates: { display
 export const deleteTeacher = async (teacherId: string) => {
   if (!teacherId) throw new Error('No teacher ID provided');
   await deleteDoc(doc(db, 'users', teacherId));
+};
+
+// Helper to get count of users by role
+const getUsersCountByRole = async (role?: UserRole): Promise<number> => {
+  let usersQuery = query(collection(db, 'users'));
+  if (role) {
+    usersQuery = query(usersQuery, where('role', '==', role));
+  }
+  const snapshot = await getDocs(usersQuery);
+  return snapshot.size;
+};
+
+// Get total count of all users
+export const getAllUsersCount = async (): Promise<number> => {
+  return getUsersCountByRole();
+};
+
+// Get total count of teachers
+export const getTeachersCount = async (): Promise<number> => {
+  return getUsersCountByRole('teacher');
+};
+
+// Get total count of parents
+export const getParentsCount = async (): Promise<number> => {
+  return getUsersCountByRole('parent');
 }; 
