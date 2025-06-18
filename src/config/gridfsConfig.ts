@@ -1,8 +1,6 @@
 import { GridFSBucket } from "mongodb";
 import mongoose from "mongoose";
-
-// Use require for CommonJS modules
-const { GridFsStorage } = require('multer-gridfs-storage');
+import { GridFsStorage } from 'multer-gridfs-storage';
 
 interface FileInfo {
   filename: string;
@@ -22,13 +20,38 @@ let gridfsBucket: GridFSBucket;
 
 // Initialize GridFS bucket
 const initGridFSBucket = async () => {
-  if (!mongoose.connection.db) {
-    throw new Error('Database connection not established');
+  try {
+    console.log('Initializing GridFS bucket...');
+    
+    if (!mongoose.connection) {
+      throw new Error('No mongoose connection available');
+    }
+    
+    if (!mongoose.connection.db) {
+      throw new Error('Database connection not established');
+    }
+
+    console.log('MongoDB connection status:', mongoose.connection.readyState);
+    console.log('Database name:', mongoose.connection.db.databaseName);
+    
+    gridfsBucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: 'stories'
+    });
+
+    // Test if bucket is accessible
+    try {
+      await gridfsBucket.find().limit(1).toArray();
+      console.log('GridFS bucket initialized and tested successfully');
+    } catch (bucketError) {
+      console.error('Error testing GridFS bucket:', bucketError);
+      throw new Error('Failed to access GridFS bucket after initialization');
+    }
+
+    return gridfsBucket;
+  } catch (error) {
+    console.error('Error initializing GridFS bucket:', error);
+    throw error;
   }
-  gridfsBucket = new GridFSBucket(mongoose.connection.db, {
-    bucketName: 'stories'
-  });
-  return gridfsBucket;
 };
 
 // Create storage engine

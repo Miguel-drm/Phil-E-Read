@@ -5,10 +5,11 @@ import cors from 'cors';
 import multer from 'multer';
 import connectDB from './utils/db';
 import { mongoStoryService } from './services/mongoStoryService';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { initGridFSBucket } from './config/gridfsConfig';
+import mongoose from 'mongoose';
+import Story from './models/Story';
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -44,25 +45,51 @@ app.use(express.json());
 // Connect to MongoDB and start server
 (async () => {
   try {
-    await connectDB();
-    initGridFSBucket();
+    // Connect to MongoDB first
+    const db = await connectDB();
     console.log('Connected to MongoDB');
-    
+
+    // Initialize GridFS
+    await initGridFSBucket();
+    console.log('GridFS initialized');
+
+    // Start the server only after successful database connection
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+
+    // Handle database disconnection
+    db.on('disconnected', () => {
+      console.error('Lost MongoDB connection. Please check your database connection.');
+    });
+
+    db.on('error', (error) => {
+      console.error('MongoDB error:', error);
+    });
+
     // Story Routes
     app.get('/api/stories', async (req: Request, res: Response) => {
       try {
         const { readingLevel, categories, language, title } = req.query;
+        console.log('Query params:', { readingLevel, categories, language, title });
+        
         const filters = {
           ...(readingLevel && { readingLevel: String(readingLevel) }),
           ...(categories && { categories: Array.isArray(categories) ? categories.map(String) : [String(categories)] }),
           ...(language && { language: String(language) }),
-          ...(title && { title: String(title) }),
+          ...(title && { title: String(title) })
         };
+        console.log('Applying filters:', filters);
+        
         const stories = await mongoStoryService.getStories(filters);
+        console.log('Stories found:', stories.length);
         res.json(stories);
       } catch (error) {
-        console.error('Error fetching stories:', error);
-        res.status(500).json({ error: 'Failed to fetch stories' });
+        console.error('Detailed error in /api/stories:', error);
+        res.status(500).json({ 
+          error: 'Failed to fetch stories',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     });
 
@@ -82,15 +109,46 @@ app.use(express.json());
 
     app.get('/api/stories/:id/pdf', async (req: Request, res: Response) => {
       try {
+        console.log('PDF endpoint called for story ID:', req.params.id);
+        
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+          console.error('Invalid story ID format:', req.params.id);
+          res.status(400).json({ error: 'Invalid story ID format' });
+          return;
+        }
+
+        const story = await Story.findById(req.params.id);
+        console.log('Story found:', {
+          id: story?._id,
+          title: story?.title,
+          hasPdfFileId: !!story?.pdfFileId,
+          hasPdfData: !!story?.pdfData,
+          pdfDataLength: story?.pdfData?.length
+        });
+
+        if (!story) {
+          console.error('Story not found:', req.params.id);
+          res.status(404).json({ error: 'Story not found' });
+          return;
+        }
+
+        console.log('Attempting to get PDF content...');
         const pdfBuffer = await mongoStoryService.getPDFContent(req.params.id);
         
+        console.log('PDF content retrieved successfully, size:', pdfBuffer.length);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Length', pdfBuffer.length);
         res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
         res.send(pdfBuffer);
       } catch (error) {
-        console.error('Error serving PDF:', error);
-        res.status(500).json({ error: 'Failed to serve PDF' });
+        console.error('Detailed error serving PDF:', error);
+        if (error instanceof Error) {
+          console.error('Error stack:', error.stack);
+        }
+        res.status(500).json({ 
+          error: 'Failed to serve PDF',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     });
 
@@ -101,66 +159,54 @@ app.use(express.json());
           return;
         }
 
-        const { title, description, grade, language, createdBy, readingLevel, categories } = req.body;
+        const { title, description, language, createdBy, readingLevel, categories } = req.body;
         
-        if (!title || !description || !grade) {
-          res.status(400).json({ error: 'Title, description, and grade are required' });
-          return;
-        }
+        // Log received data for debugging
+        console.log('Received story data:', {
+          title,
+          description,
+          language,
+          createdBy,
+          readingLevel,
+          categories,
+          fileSize: req.file.size,
+          fileName: req.file.originalname
+        });
 
-        // Extract text from PDF
-        let textContent = '';
-        try {
-          // Create a clean ArrayBuffer from the file buffer
-          const arrayBuffer = req.file.buffer.buffer.slice(
-            req.file.buffer.byteOffset,
-            req.file.buffer.byteOffset + req.file.buffer.byteLength
-          );
-          
-          console.log('Starting PDF text extraction...');
-          const loadingTask = pdfjsLib.getDocument(new Uint8Array(arrayBuffer));
-          const pdf = await loadingTask.promise;
-          
-          console.log(`PDF loaded successfully. Processing ${pdf.numPages} pages...`);
-          
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            console.log(`Extracting text from page ${pageNum}...`);
-            const page = await pdf.getPage(pageNum);
-            const content = await page.getTextContent();
-            const pageText = content.items
-              .map((item: any) => item.str)
-              .join(' ')
-              .trim();
-            
-            if (pageText) {
-              textContent += pageText + '\n\n';
-            }
-          }
-          
-          if (!textContent.trim()) {
-            throw new Error('No text content could be extracted from the PDF');
-          }
-          
-          console.log(`Text extraction completed. Extracted ${textContent.length} characters`);
-        } catch (error) {
-          console.error('Error extracting text from PDF:', error);
+        // Validate required fields
+        const missingFields = [];
+        if (!title) missingFields.push('title');
+        if (!description) missingFields.push('description');
+
+        if (missingFields.length > 0) {
           res.status(400).json({ 
-            error: 'Failed to extract text from PDF. Please ensure the PDF contains readable text content.',
-            details: error instanceof Error ? error.message : 'Unknown error'
+            error: 'Missing required fields', 
+            missingFields,
+            receivedData: req.body 
           });
           return;
         }
 
+        // Parse categories if it's a string
+        let parsedCategories;
+        try {
+          parsedCategories = categories ? JSON.parse(categories) : undefined;
+        } catch (error) {
+          console.warn('Failed to parse categories:', error);
+          parsedCategories = undefined;
+        }
+
         const storyData = {
-          title,
-          description,
-          grade,
-          language,
+          title: title.trim(),
+          description: description.trim(),
+          language: language || 'english',
           createdBy,
           readingLevel,
-          categories: categories ? JSON.parse(categories) : undefined,
-          textContent: textContent.trim()
+          categories: parsedCategories,
+          textContent: ''  // Default empty string for text content
         };
+
+        console.log('Creating story with data:', storyData);
 
         const story = await mongoStoryService.createStory(storyData, req.file.buffer);
         res.status(201).json(story);
@@ -220,9 +266,6 @@ app.use(express.json());
       }
     });
 
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

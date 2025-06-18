@@ -1,13 +1,28 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { ObjectId } from 'mongodb';
 
 export interface IStory extends Document {
   title: string;
   description: string;
-  grade: string;
-  pdfFileId: mongoose.Types.ObjectId;
+  grade?: string;
+  pdfFileId?: ObjectId;
+  pdfData?: string;
+  pdfUrl?: string;
   textContent: string;
+  language?: string;
+  createdBy?: string;
+  readingLevel?: string;
+  categories?: string[];
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface StoryFilters {
+  title?: string;
+  language?: string;
+  readingLevel?: string;
+  categories?: string[];
 }
 
 const StorySchema: Schema = new Schema({
@@ -24,20 +39,57 @@ const StorySchema: Schema = new Schema({
   },
   grade: {
     type: String,
-    required: [true, 'Grade is required'],
     trim: true
   },
   pdfFileId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: [true, 'PDF file ID is required']
+    required: false
+  },
+  pdfData: {
+    type: String,
+    required: false
+  },
+  pdfUrl: {
+    type: String,
+    required: false
   },
   textContent: {
     type: String,
-    required: [true, 'Text content is required'],
+    required: false,
+    default: '',
     trim: true
+  },
+  language: {
+    type: String,
+    trim: true
+  },
+  createdBy: {
+    type: String,
+    trim: true
+  },
+  readingLevel: {
+    type: String,
+    trim: true
+  },
+  categories: [{
+    type: String,
+    trim: true
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: {
+    transform: function(doc, ret) {
+      if (!ret.pdfFileId && ret.pdfData) {
+        ret.hasPdfData = true;
+        delete ret.pdfData;
+      }
+      return ret;
+    }
+  }
 });
 
 // Add text index for search functionality

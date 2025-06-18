@@ -26,3 +26,7 @@ declare module 'pdfjs-dist/build/pdf' {
   
   export const version: string;
 }
+
+declare module 'pdfjs-dist/lib/pdf.js' {
+  export * from 'pdfjs-dist';
+}

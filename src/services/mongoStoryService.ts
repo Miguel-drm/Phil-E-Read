@@ -6,8 +6,8 @@ import { GridFSService } from './gridfsService';
 interface StoryInput {
   title: string;
   description: string;
-  grade: string;
-  textContent: string;
+  grade?: string;
+  textContent?: string;
   language?: string;
   createdBy?: string;
   readingLevel?: string;
@@ -21,7 +21,7 @@ export const mongoStoryService = {
       // Upload PDF to GridFS
       const pdfFileId = await GridFSService.uploadFile(file, `${storyData.title.replace(/\s+/g, '-').toLowerCase()}.pdf`, {
         contentType: 'application/pdf',
-        grade: storyData.grade
+        ...(storyData.grade && { grade: storyData.grade })
       });
 
       // Create the story with the GridFS file ID
@@ -86,13 +86,42 @@ export const mongoStoryService = {
 
   async getPDFContent(id: string): Promise<Buffer> {
     try {
+      console.log('Getting PDF content for story ID:', id);
+      
       const story = await Story.findById(id);
-      if (!story || !story.pdfFileId) {
-        throw new Error('Story or PDF not found');
+      if (!story) {
+        console.error('Story not found:', id);
+        throw new Error('Story not found');
       }
 
-      const { buffer } = await GridFSService.downloadFile(story.pdfFileId.toString());
-      return buffer;
+      // If we have a GridFS file ID, try to get the PDF from GridFS
+      if (story.pdfFileId) {
+        console.log('Found pdfFileId, attempting to download from GridFS:', story.pdfFileId);
+        try {
+          const { buffer } = await GridFSService.downloadFile(story.pdfFileId.toString());
+          console.log('Successfully downloaded PDF from GridFS, size:', buffer.length);
+          return buffer;
+        } catch (downloadError) {
+          console.error('Error downloading PDF from GridFS:', downloadError);
+          // Fall through to try pdfData
+        }
+      }
+
+      // If we have direct PDF data, use that
+      if (story.pdfData) {
+        console.log('Using direct PDF data from story');
+        try {
+          const buffer = Buffer.from(story.pdfData, 'base64');
+          console.log('Successfully converted PDF data to buffer, size:', buffer.length);
+          return buffer;
+        } catch (conversionError) {
+          console.error('Error converting PDF data to buffer:', conversionError);
+          throw new Error('Failed to process PDF data');
+        }
+      }
+
+      console.error('Story has no PDF content available');
+      throw new Error('Story has no PDF content available');
     } catch (error) {
       console.error('Error getting PDF content:', error);
       throw error;
@@ -119,7 +148,7 @@ export const mongoStoryService = {
           `${(updateData.title || story.title).replace(/\s+/g, '-').toLowerCase()}.pdf`,
           {
             contentType: 'application/pdf',
-            grade: updateData.grade || story.grade
+            ...(updateData.grade && { grade: updateData.grade })
           }
         );
 

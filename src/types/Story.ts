@@ -6,6 +6,7 @@ export interface Story {
   description: string;
   grade: string;
   pdfFileId: ObjectId;
+  pdfUrl?: string;
   textContent: string;
   language?: string;
   createdBy?: string;

@@ -5,7 +5,7 @@ import Swal from 'sweetalert2'; // Import Swal for validation messages
 interface AddStoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (story: Omit<Story, '_id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'isActive' | 'pdfUrl'>, file: File) => Promise<void>; // onSave now expects a file
+  onSave: (storyData: Pick<Story, 'title' | 'description' | 'language'>, file: File) => Promise<void>;
 }
 
 const AddStoryModal: React.FC<AddStoryModalProps> = ({
@@ -14,7 +14,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
   onSave,
 }) => {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');  // Add this line
+  const [description, setDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [language, setLanguage] = useState<'english' | 'tagalog'>('english');
   const [isSaving, setIsSaving] = useState(false);
@@ -23,7 +23,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
     if (!isOpen) {
       // Reset form when modal closes
       setTitle('');
-      setDescription('');  // Add this line
+      setDescription('');
       setSelectedFile(null);
       setLanguage('english');
       setIsSaving(false);
@@ -31,7 +31,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
   }, [isOpen]);
 
   const handleSubmit = async () => {
-    if (!title || !selectedFile || !language || !description) {  // Add description check
+    if (!title || !selectedFile || !language || !description) {
       Swal.fire('Error', 'Please fill in all fields and select a PDF file.', 'error');
       return;
     }
@@ -47,7 +47,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
       await onSave(
         {
           title,
-          description,  // Add this line
+          description,
           language,
         },
         selectedFile
@@ -83,7 +83,6 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
             />
           </div>
 
-          {/* Add description field */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
@@ -95,6 +94,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
               className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
             />
           </div>
+
           <div>
             <label htmlFor="pdfFile" className="block text-sm font-medium text-gray-700 mb-1">Story PDF</label>
             <input
@@ -105,6 +105,7 @@ const AddStoryModal: React.FC<AddStoryModalProps> = ({
               className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
           </div>
+
           <div>
             <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">Language</label>
             <select

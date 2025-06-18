@@ -1,16 +1,21 @@
 import type { Story } from '../types/Story';
 import axios from 'axios';
 
-const API_URL = '/api/stories';
+const API_URL = 'http://localhost:5000/api/stories';
 
 class StoryService {
   async createStory(formData: FormData): Promise<Story> {
-    const response = await axios.post(`${API_URL}/create`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-    return response.data;
+    try {
+      const response = await axios.post(API_URL, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error in createStory:', error);
+      throw error;
+    }
   }
 
   async getStoryById(id: string): Promise<Story> {

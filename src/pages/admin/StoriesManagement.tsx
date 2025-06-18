@@ -6,7 +6,6 @@ import AddStoryModal from './AddStoryModal';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface StoryFilters {
-  grade?: string;
   language?: string;
   searchTerm?: string;
 }
@@ -17,20 +16,18 @@ export default function StoriesManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [filters, setFilters] = useState<StoryFilters>({
-    language: '',
-    grade: ''
+    language: ''
   });
   const { currentUser } = useAuth();
 
   useEffect(() => {
     loadStories();
-  }, [filters]); // Reload when filters change
+  }, [filters]);
 
   const loadStories = async () => {
     try {
       setLoading(true);
       const storiesData = await storyService.getStories({
-        grade: filters.grade,
         searchTerm: filters.language ? `language:${filters.language}` : undefined
       });
       setStories(storiesData);
@@ -50,7 +47,7 @@ export default function StoriesManagement() {
       }
 
       // Validate required fields
-      if (!storyData.title?.trim() || !storyData.description?.trim() || !storyData.grade) {
+      if (!storyData.title?.trim() || !storyData.description?.trim()) {
         Swal.fire('Error', 'Please fill in all required fields', 'error');
         return;
       }
@@ -64,18 +61,17 @@ export default function StoriesManagement() {
       const formData = new FormData();
       formData.append('title', storyData.title.trim());
       formData.append('description', storyData.description.trim());
-      formData.append('grade', storyData.grade);
       formData.append('pdf', file);
-      
-      if (storyData.language) {
-        formData.append('language', storyData.language);
-      }
-      if (storyData.readingLevel) {
-        formData.append('readingLevel', storyData.readingLevel);
-      }
-      if (storyData.categories?.length) {
-        formData.append('categories', JSON.stringify(storyData.categories));
-      }
+      formData.append('language', storyData.language || 'english');
+      formData.append('createdBy', currentUser.uid);
+
+      console.log('Sending form data:', {
+        title: storyData.title,
+        description: storyData.description,
+        language: storyData.language,
+        fileSize: file.size,
+        fileName: file.name
+      });
 
       const result = await storyService.createStory(formData);
       if (result) {
@@ -159,17 +155,6 @@ export default function StoriesManagement() {
       </div>
 
       <div className="mb-6 flex gap-4">
-        <select
-          value={filters.grade}
-          onChange={(e) => setFilters({ ...filters, grade: e.target.value })}
-          className="border rounded-lg px-4 py-2"
-        >
-          <option value="">All Grades</option>
-          <option value="1">Grade 1</option>
-          <option value="2">Grade 2</option>
-          <option value="3">Grade 3</option>
-        </select>
-
         <select
           value={filters.language}
           onChange={(e) => setFilters({ ...filters, language: e.target.value })}

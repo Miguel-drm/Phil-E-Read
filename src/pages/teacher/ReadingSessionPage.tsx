@@ -3,6 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { readingSessionService, type ReadingSession } from '../../services/readingSessionService';
 import { storyService } from '../../services/storyService';
 import { ArrowLeftIcon, XCircleIcon, BookOpenIcon, UserGroupIcon, ClockIcon, ChartBarIcon, MicrophoneIcon, PlayIcon, PauseIcon, StopIcon } from '@heroicons/react/24/outline';
+import * as pdfjsLib from 'pdfjs-dist';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+import 'pdfjs-dist/build/pdf.worker.entry';
+
+// Initialize PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const ReadingSessionPage: React.FC = () => {
   const [storyText, setStoryText] = useState<string>('');
@@ -17,6 +23,9 @@ const ReadingSessionPage: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [pdfContent, setPdfContent] = useState<string>('');
+  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const handleStartRecording = () => {
     setIsRecording(true);
@@ -29,6 +38,45 @@ const ReadingSessionPage: React.FC = () => {
 
   const handleResumeRecording = () => {
     setIsPaused(false);
+  };
+
+  const loadPdfContent = async (pdfUrl: string) => {
+    try {
+      setIsLoadingPdf(true);
+      setPdfError(null);
+      
+      // Create a data object URL from the PDF response
+      const response = await fetch(pdfUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+      }
+      
+      const pdfBlob = await response.blob();
+      const pdfObjectUrl = URL.createObjectURL(pdfBlob);
+      
+      const loadingTask = pdfjsLib.getDocument(pdfObjectUrl);
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .filter((item): item is TextItem => 'str' in item)
+          .map(item => item.str)
+          .join(' ');
+        fullText += pageText + '\n\n';
+      }
+
+      // Clean up the object URL
+      URL.revokeObjectURL(pdfObjectUrl);
+      setPdfContent(fullText);
+    } catch (error) {
+      console.error('Error loading PDF:', error);
+      setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
+    } finally {
+      setIsLoadingPdf(false);
+    }
   };
 
   useEffect(() => {
@@ -76,24 +124,34 @@ const ReadingSessionPage: React.FC = () => {
         console.log('Found matching story:', story);
 
         try {
-          // Get the full story details including text content
+          // Get the full story details
           const fullStory = await storyService.getStoryById(story._id);
           
           if (!fullStory) {
             throw new Error('Failed to fetch story details');
           }
 
-          if (!fullStory.textContent || fullStory.textContent.trim().length === 0) {
-            console.error('Story has no text content:', fullStory);
-            throw new Error('Story text content is empty. Please ensure the PDF was properly processed during upload.');
+          // Try to load PDF content using the API endpoint
+          try {
+            const pdfUrl = storyService.getStoryPdfUrl(story._id);
+            await loadPdfContent(pdfUrl);
+            // If PDF loading succeeds, split the content into words
+            const wordArray = pdfContent.split(/\s+/).filter((word: string) => word.length > 0);
+            setWords(wordArray);
+            console.log('PDF processing completed. Found', wordArray.length, 'words');
+          } catch (pdfError) {
+            console.error('Error loading PDF:', pdfError);
+            // If PDF loading fails, fall back to textContent if available
+            if (fullStory.textContent && fullStory.textContent.trim().length > 0) {
+              setStoryText(fullStory.textContent.trim());
+              const wordArray = fullStory.textContent.trim().split(/\s+/).filter((word: string) => word.length > 0);
+              setWords(wordArray);
+              console.log('Text processing completed. Found', wordArray.length, 'words');
+            } else {
+              throw new Error('Failed to load story content: Both PDF and text content are unavailable');
+            }
           }
 
-          // Set the story text and words
-          const cleanText = fullStory.textContent.trim();
-          setStoryText(cleanText);
-          const wordArray = cleanText.split(/\s+/).filter((word: string) => word.length > 0);
-          setWords(wordArray);
-          console.log('Text processing completed. Found', wordArray.length, 'words');
         } catch (error) {
           console.error('Error fetching story content:', error);
           if (error instanceof Error) {
@@ -116,14 +174,14 @@ const ReadingSessionPage: React.FC = () => {
     };
 
     fetchSession();
-  }, [sessionId]);
+  }, [sessionId, pdfContent]);
 
   const handleGoBack = () => {
     navigate(-1);
   };
 
   const renderStoryContent = () => {
-    if (isLoading) {
+    if (isLoadingPdf || isLoading) {
       return (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
@@ -131,11 +189,11 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (error) {
+    if (pdfError || error) {
       return (
         <div className="text-center p-8">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <div className="text-red-600 mb-4">{error}</div>
+          <div className="text-red-600 mb-4">{pdfError || error}</div>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -146,7 +204,7 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (!storyText) {
+    if (!pdfContent && !storyText) {
       return (
         <div className="text-center text-gray-600 p-8">
           <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -160,7 +218,7 @@ const ReadingSessionPage: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="prose max-w-none">
             <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-              {storyText}
+              {pdfContent || storyText}
             </div>
           </div>
         </div>

@@ -10,10 +10,20 @@ export class GridFSService {
   }
 
   static async ensureBucket() {
-    if (!gridfsBucket) {
-      await this.initialize();
+    try {
+      if (!gridfsBucket) {
+        console.log('GridFS bucket not initialized, initializing now...');
+        await this.initialize();
+        if (!gridfsBucket) {
+          throw new Error('Failed to initialize GridFS bucket');
+        }
+        console.log('GridFS bucket initialized successfully');
+      }
+      return gridfsBucket;
+    } catch (error) {
+      console.error('Error ensuring GridFS bucket:', error);
+      throw new Error(`Failed to ensure GridFS bucket: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    return gridfsBucket;
   }
 
   /**
