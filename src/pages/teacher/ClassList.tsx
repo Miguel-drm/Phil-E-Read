@@ -42,13 +42,16 @@ const ClassList: React.FC = () => {
   // Helper function to check if the current user has management permissions
   const canManage = (userRole === 'teacher' || userRole === 'admin') && isProfileComplete;
 
-  // Load students on component mount
+  // Load students on component mount (now with real-time updates)
   useEffect(() => {
-    if (currentUser?.uid) {
-      console.log('Current User UID:', currentUser.uid); // Add this line
-      loadStudents();
-      loadClassStatistics();
-    }
+    if (!currentUser?.uid) return;
+    setIsLoading(true);
+    // Subscribe to real-time updates
+    const unsubscribe = studentService.subscribeToStudents(currentUser.uid, (fetchedStudents) => {
+      setStudents(fetchedStudents);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
   }, [currentUser?.uid]);
 
   // Filter students when search query or filter changes
@@ -175,15 +178,13 @@ const ClassList: React.FC = () => {
           const students = jsonData.map((row: any) => {
             const name = (row.Name || row.name || '').trim();
             const surname = (row.Surname || row.surname || '').trim();
-            
-            // Combine name and surname with ' | ' separator
-            const fullName = [surname, name].filter(Boolean).join(' | ');
-
+            // Combine as 'Name Surname' (first name then surname)
+            const fullName = [name, surname].filter(Boolean).join(' ');
             return {
               name: fullName,
-            grade: row.Grade || row.grade || '',
-            readingLevel: String(row.ReadingLevel || row.readingLevel || '').replace('Level ', '').trim() as string,
-            // parentId and parentName can be added here if available in import
+              grade: row.Grade || row.grade || '',
+              readingLevel: String(row.ReadingLevel || row.readingLevel || '').replace('Level ', '').trim() as string,
+              // parentId and parentName can be added here if available in import
             };
           });
           resolve(students);
@@ -217,18 +218,62 @@ const ClassList: React.FC = () => {
       return;
     }
 
+    // Extract grade level (number) from selected class/grade name
+    const gradeLevelMatch = String(gradeObj.name).match(/\d+/);
+    const selectedGradeLevel = gradeLevelMatch ? gradeLevelMatch[0] : String(gradeObj.name).trim();
+    // Check if all students in the import have the correct grade level
+    const mismatched = importedStudents.filter(s => String(s.grade).trim() !== selectedGradeLevel);
+    if (mismatched.length > 0) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Grade Mismatch',
+        html:
+          `<div style='max-height:340px;overflow-y:auto;padding-bottom:8px;'>` +
+          `The following students do not match the selected class/grade (<b>${gradeObj.name}</b>):<br><br>` +
+          `<div style='width:100%;box-sizing:border-box;margin-bottom:12px;'>` +
+          mismatched.map(s => `
+            <div style='display:flex;justify-content:space-between;align-items:center;background:#ffeaea;padding:10px 18px;border-radius:8px;margin-bottom:6px;width:100%;box-sizing:border-box;'>
+              <span style='font-weight:bold;text-align:left;'>${s.name}</span>
+              <span style='font-size:13px;text-align:right;'>(Excel grade: ${s.grade})</span>
+            </div>
+          `).join('') +
+          `</div>` +
+          `<div style='margin-top:8px;'>Please check your Excel file and try again.</div>` +
+          `</div>`,
+        customClass: { popup: 'text-left' }
+      });
+      return;
+    }
+
+    // Block import if any student name contains a number
+    const invalidNames = importedStudents.filter(s => /\d/.test(s.name));
+    if (invalidNames.length > 0) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Invalid Student Name',
+        html:
+          `The following student name${invalidNames.length > 1 ? 's contain' : ' contains'} a number and cannot be imported:<br><br>` +
+          `<div style='width:100%;box-sizing:border-box;margin-bottom:12px;'>` +
+          invalidNames.map(s => `<div style='background:#ffeaea;padding:10px 18px;border-radius:8px;margin-bottom:6px;width:100%;box-sizing:border-box;text-align:left;'>${s.name}</div>`).join('') +
+          `</div>` +
+          `<div style='margin-top:8px;'>Please remove numbers from student names in your Excel file and try again.</div>`,
+        customClass: { popup: 'text-left' }
+      });
+      return;
+    }
+
     setIsImporting(true);
     try {
       // Import students to main collection and add to selected class subcollection
-      await studentService.importStudents(
+      const { imported, skipped } = await studentService.importStudents(
         importedStudents.map(s => ({ ...s, grade: gradeObj.name })),
         currentUser.uid
       );
       // Add each imported student to the selected class subcollection
       // (Find the student in the main collection by name and grade)
       const allStudents = await studentService.getStudents(currentUser.uid);
-      for (const imported of importedStudents) {
-        const match = allStudents.find(s => s.name === imported.name && String(s.grade) === String(gradeObj.name));
+      for (const importedName of imported) {
+        const match = allStudents.find(s => s.name === importedName && String(s.grade) === String(gradeObj.name));
         if (match && match.id) {
           await gradeService.addStudentToGrade(selectedGrade, {
             studentId: match.id,
@@ -243,15 +288,32 @@ const ClassList: React.FC = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      showSuccess('Import Complete', 'Students imported successfully!');
+      let messageHtml = `<div style='max-height:340px;overflow-y:auto;padding-bottom:8px;'>`;
+      messageHtml += `<div style='margin-bottom:16px;'><b>${imported.length} student${imported.length !== 1 ? 's' : ''} imported successfully.</b></div>`;
+      if (imported.length > 0) {
+        messageHtml += `<div style='margin-bottom:12px;'><b>Imported:</b><div style='width:100%;box-sizing:border-box;margin-top:6px;'>`;
+        messageHtml += imported.map(name => `<div style='background:#e6f7e6;padding:10px 18px;border-radius:8px;margin-bottom:6px;width:100%;box-sizing:border-box;text-align:left;'>${name}</div>`).join('');
+        messageHtml += `</div></div>`;
+      }
+      if (skipped.length > 0) {
+        messageHtml += `<div style='margin-bottom:12px;'><b>Skipped (duplicate in another class/grade):</b><div style='width:100%;box-sizing:border-box;margin-top:6px;'>`;
+        messageHtml += skipped.map(name => `<div style='background:#ffeaea;padding:10px 18px;border-radius:8px;margin-bottom:6px;width:100%;box-sizing:border-box;text-align:left;'>${name}</div>`).join('');
+        messageHtml += `</div><div style='font-size:13px;color:#b71c1c;margin-top:6px;'>These students were not imported because a student with the same name already exists in another class/grade.</div></div>`;
+      }
+      messageHtml += `</div>`;
+      await Swal.fire({
+        icon: 'success',
+        title: 'Import Complete',
+        html: messageHtml,
+        customClass: { popup: 'text-left' }
+      });
     } catch (error) {
       console.error('Error importing students:', error);
       showError('Import Failed', 'An error occurred during student import. Please try again.');
-    } finally {
-      setIsImporting(false);
-      setShowImportPreview(false); // Close the preview modal after import attempt
-      setImportedStudents([]); // Clear imported students data
     }
+    setIsImporting(false);
+    setShowImportPreview(false); // Close the preview modal after import attempt
+    setImportedStudents([]); // Clear imported students data
   };
 
   const handleCancelImport = () => {
@@ -383,7 +445,7 @@ const ClassList: React.FC = () => {
     if (result.isConfirmed) {
       setDeletingAllStudents(true);
       try {
-        const ids = students.map(s => s.id).filter((id): id is string => Boolean(id));
+        const ids = filteredStudents.map(s => s.id).filter((id): id is string => Boolean(id));
         if (ids.length > 0) {
           await studentService.batchDeleteStudents(ids);
         }
@@ -409,13 +471,16 @@ const ClassList: React.FC = () => {
   };
 
   const handleDeleteStudent = async (studentId: string, studentName: string) => {
-    const result = await showConfirmation(
-      'Delete Student',
-      `Are you sure you want to remove ${studentName} from the class? This action cannot be undone.`,
-      'Delete',
-      'Cancel',
-      'warning'
-    );
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: 'Delete Student',
+      html: `Are you sure you want to remove <span style='background:#ffeaea;padding:2px 8px;border-radius:6px;font-weight:bold;'>${studentName}</span> from the class? This action cannot be undone.`,
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      focusCancel: true,
+      customClass: { popup: 'text-left' }
+    });
     if (result.isConfirmed) {
       try {
         Swal.fire({
@@ -427,12 +492,12 @@ const ClassList: React.FC = () => {
           }
         });
         await studentService.deleteStudent(studentId);
-        Swal.close();
-        showSuccess('Student Removed', `${studentName} has been removed from the class.`);
-        setFilteredStudents(prev => prev.filter(s => s.id !== studentId));
-        setStudents(prev => prev.filter(s => s.id !== studentId));
+        // Always reload all relevant data after deletion
+        await loadStudents();
         await loadGrades();
         await loadClassStatistics();
+        Swal.close();
+        showSuccess('Student Removed', `${studentName} has been removed from the class.`);
       } catch (error) {
         Swal.close();
         showError('Failed to Remove', 'An error occurred while removing the student.');

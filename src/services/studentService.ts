@@ -232,38 +232,29 @@ class StudentService {
   }
 
   // Import multiple students
-  async importStudents(students: ImportedStudent[], teacherId: string): Promise<string[]> {
+  async importStudents(students: ImportedStudent[], teacherId: string): Promise<{ imported: string[]; skipped: string[] }> {
     try {
       const batch = writeBatch(db);
-      const studentIds: string[] = [];
+      const imported: string[] = [];
+      const skipped: string[] = [];
 
       for (const studentData of students) {
-        // Try to find an existing student with the same name for this teacher
+        // Try to find an existing student with the same name for this teacher (regardless of grade)
         const q = query(
           collection(db, this.collectionName),
           where('teacherId', '==', teacherId),
-          where('name', '==', studentData.name), // Match by combined name
+          where('name', '==', studentData.name),
           limit(1)
         );
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          // Student found, update it
-          const existingDoc = querySnapshot.docs[0];
-          const docRef = doc(db, this.collectionName, existingDoc.id);
-          batch.update(docRef, {
-            name: studentData.name, // Update combined name
-            grade: studentData.grade, // Update grade if changed
-            readingLevel: studentData.readingLevel, // Update reading level if changed
-            parentId: studentData.parentId || null, // Update parent info
-            parentName: studentData.parentName || null, // Update parent info
-            updatedAt: serverTimestamp()
-          });
-          studentIds.push(existingDoc.id);
+          // Student found, skip importing to avoid duplicate in another grade
+          skipped.push(studentData.name);
         } else {
           // No existing student, add a new one
           const docRef = doc(collection(db, this.collectionName));
-          studentIds.push(docRef.id);
+          imported.push(studentData.name);
 
           batch.set(docRef, {
             ...studentData,
@@ -280,7 +271,7 @@ class StudentService {
       }
 
       await batch.commit();
-      return studentIds;
+      return { imported, skipped };
     } catch (error) {
       console.error('Error importing students:', error);
       throw new Error('Failed to import students');
@@ -429,6 +420,21 @@ class StudentService {
       console.error('Error getting students by parent:', error);
       throw new Error('Failed to fetch students by parent');
     }
+  }
+
+  // Subscribe to real-time updates for students by teacherId
+  subscribeToStudents(teacherId: string, callback: (students: Student[]) => void) {
+    const q = query(
+      collection(db, this.collectionName),
+      where('teacherId', '==', teacherId)
+    );
+    return onSnapshot(q, (querySnapshot) => {
+      const students: Student[] = [];
+      querySnapshot.forEach((doc) => {
+        students.push({ id: doc.id, ...doc.data() } as Student);
+      });
+      callback(students);
+    });
   }
 }
 

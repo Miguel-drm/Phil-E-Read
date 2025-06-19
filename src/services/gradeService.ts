@@ -178,6 +178,14 @@ class GradeService {
   async deleteGrade(gradeId: string): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, gradeId);
+      // Get the grade document to know the grade name and teacherId
+      const gradeDoc = await getDoc(docRef);
+      let gradeName = '';
+      let teacherId = '';
+      if (gradeDoc.exists()) {
+        gradeName = gradeDoc.data().name;
+        teacherId = gradeDoc.data().teacherId;
+      }
       // DEBUG: List all subcollections under the grade
       if (typeof (docRef as any).listCollections === 'function') {
         const subcollections = await (docRef as any).listCollections();
@@ -204,6 +212,17 @@ class GradeService {
         });
         await batch.commit();
         studentsSnap = await getDocs(studentsRef);
+      }
+      // Cascade delete: Remove all students in the main collection with this grade and teacherId
+      if (gradeName && teacherId) {
+        const studentsMainRef = collection(db, 'students');
+        const q = query(studentsMainRef, where('grade', '==', gradeName), where('teacherId', '==', teacherId));
+        const studentsToDelete = await getDocs(q);
+        const batch = writeBatch(db);
+        studentsToDelete.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
       }
       // Now delete the grade document
       await deleteDoc(docRef);
