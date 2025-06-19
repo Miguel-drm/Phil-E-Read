@@ -117,13 +117,15 @@ app.use(express.json());
           return;
         }
 
-        const story = await Story.findById(req.params.id);
+        // Use lean() to get plain JavaScript object
+        const story = await Story.findById(req.params.id).lean();
         console.log('Story found:', {
           id: story?._id,
           title: story?.title,
           hasPdfFileId: !!story?.pdfFileId,
           hasPdfData: !!story?.pdfData,
-          pdfDataLength: story?.pdfData?.length
+          pdfDataLength: story?.pdfData?.length,
+          pdfDataStart: story?.pdfData?.substring(0, 50)  // Log first 50 chars of PDF data
         });
 
         if (!story) {
@@ -136,6 +138,8 @@ app.use(express.json());
         const pdfBuffer = await mongoStoryService.getPDFContent(req.params.id);
         
         console.log('PDF content retrieved successfully, size:', pdfBuffer.length);
+        console.log('PDF content starts with:', pdfBuffer.slice(0, 50).toString());  // Log start of PDF content
+        
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Length', pdfBuffer.length);
         res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
@@ -170,7 +174,8 @@ app.use(express.json());
           readingLevel,
           categories,
           fileSize: req.file.size,
-          fileName: req.file.originalname
+          fileName: req.file.originalname,
+          mimeType: req.file.mimetype
         });
 
         // Validate required fields
@@ -196,6 +201,19 @@ app.use(express.json());
           parsedCategories = undefined;
         }
 
+        // Verify the PDF file
+        if (!req.file.buffer) {
+          throw new Error('PDF file buffer is missing');
+        }
+
+        // Check if it's a valid PDF
+        const pdfHeader = req.file.buffer.slice(0, 4).toString();
+        if (!pdfHeader.startsWith('%PDF')) {
+          console.error('Invalid PDF header:', pdfHeader);
+          res.status(400).json({ error: 'Invalid PDF file: Missing PDF header' });
+          return;
+        }
+
         const storyData = {
           title: title.trim(),
           description: description.trim(),
@@ -207,6 +225,7 @@ app.use(express.json());
         };
 
         console.log('Creating story with data:', storyData);
+        console.log('PDF file size:', req.file.size, 'bytes');
 
         const story = await mongoStoryService.createStory(storyData, req.file.buffer);
         res.status(201).json(story);

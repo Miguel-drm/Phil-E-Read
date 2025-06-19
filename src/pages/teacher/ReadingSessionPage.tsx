@@ -45,32 +45,58 @@ const ReadingSessionPage: React.FC = () => {
       setIsLoadingPdf(true);
       setPdfError(null);
       
-      // Create a data object URL from the PDF response
+      console.log('Fetching PDF from URL:', pdfUrl);
       const response = await fetch(pdfUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch PDF: ${response.statusText}`);
       }
       
-      const pdfBlob = await response.blob();
-      const pdfObjectUrl = URL.createObjectURL(pdfBlob);
-      
-      const loadingTask = pdfjsLib.getDocument(pdfObjectUrl);
-      const pdf = await loadingTask.promise;
-      let fullText = '';
+      // Get the PDF as an array buffer
+      const pdfArrayBuffer = await response.arrayBuffer();
+      console.log('Received array buffer of size:', pdfArrayBuffer.byteLength);
 
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .filter((item): item is TextItem => 'str' in item)
-          .map(item => item.str)
-          .join(' ');
-        fullText += pageText + '\n\n';
+      // Check if we received valid PDF data (should start with %PDF-)
+      const firstBytes = new Uint8Array(pdfArrayBuffer.slice(0, 5));
+      const header = new TextDecoder().decode(firstBytes);
+      console.log('PDF header:', header);
+      if (!header.startsWith('%PDF-')) {
+        throw new Error('Invalid PDF data: Missing PDF header');
       }
 
-      // Clean up the object URL
-      URL.revokeObjectURL(pdfObjectUrl);
-      setPdfContent(fullText);
+      // Load the PDF using PDF.js
+      try {
+        const loadingTask = pdfjsLib.getDocument({
+          data: pdfArrayBuffer,
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+          cMapPacked: true,
+        });
+        
+        const pdf = await loadingTask.promise;
+        console.log('PDF loaded successfully, pages:', pdf.numPages);
+        
+        let fullText = '';
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          console.log('Processing page', pageNum);
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .filter((item): item is TextItem => 'str' in item)
+            .map(item => item.str)
+            .join(' ');
+          fullText += pageText + '\n\n';
+        }
+
+        console.log('Text extraction complete, text length:', fullText.length);
+        setPdfContent(fullText);
+        
+        // Split content into words and update state
+        const wordArray = fullText.split(/\s+/).filter((word: string) => word.length > 0);
+        setWords(wordArray);
+        console.log('PDF processing completed. Found', wordArray.length, 'words');
+      } catch (pdfError) {
+        console.error('Error processing PDF:', pdfError);
+        throw pdfError;
+      }
     } catch (error) {
       console.error('Error loading PDF:', error);
       setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');

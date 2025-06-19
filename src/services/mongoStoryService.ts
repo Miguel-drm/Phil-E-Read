@@ -111,12 +111,31 @@ export const mongoStoryService = {
       if (story.pdfData) {
         console.log('Using direct PDF data from story');
         try {
-          const buffer = Buffer.from(story.pdfData, 'base64');
-          console.log('Successfully converted PDF data to buffer, size:', buffer.length);
+          // Remove any potential data URL prefix and clean up the base64 string
+          let base64Data = story.pdfData.replace(/^data:application\/pdf;base64,/, '');
+          
+          // Remove any whitespace or newlines that might have gotten into the base64 string
+          base64Data = base64Data.replace(/\s/g, '');
+          
+          console.log('Base64 data length:', base64Data.length);
+          console.log('First 50 chars of base64 data:', base64Data.substring(0, 50));
+          
+          const buffer = Buffer.from(base64Data, 'base64');
+          console.log('Converted to buffer, size:', buffer.length);
+          console.log('First 20 bytes:', buffer.slice(0, 20).toString('hex'));
+          
+          // Verify this is actually a PDF
+          const header = buffer.slice(0, 4).toString();
+          console.log('PDF header:', header);
+          if (!header.startsWith('%PDF')) {
+            console.error('Invalid PDF header detected:', header);
+            throw new Error('Invalid PDF data: Missing PDF header');
+          }
+          
           return buffer;
         } catch (conversionError) {
           console.error('Error converting PDF data to buffer:', conversionError);
-          throw new Error('Failed to process PDF data');
+          throw new Error('Failed to process PDF data: ' + (conversionError instanceof Error ? conversionError.message : 'Unknown error'));
         }
       }
 
