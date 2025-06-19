@@ -22,7 +22,6 @@ export interface Student {
   name: string;
   grade: string;
   readingLevel: string;
-  attendance: number;
   performance: 'Excellent' | 'Good' | 'Needs Improvement';
   lastAssessment: string;
   parentId?: string;
@@ -268,7 +267,6 @@ class StudentService {
 
           batch.set(docRef, {
             ...studentData,
-            attendance: 0,
             performance: 'Good' as const,
             lastAssessment: new Date().toISOString().split('T')[0],
             status: 'active' as const, // Set as active upon import
@@ -351,7 +349,6 @@ class StudentService {
   // Get class statistics
   async getClassStatistics(teacherId: string): Promise<{
     totalStudents: number;
-    averageAttendance: number;
     excellentPerformers: number;
   }> {
     try {
@@ -360,22 +357,17 @@ class StudentService {
       if (students.length === 0) {
         return {
           totalStudents: 0,
-          averageAttendance: 0,
           excellentPerformers: 0
         };
       }
       
       const totalStudents = students.length;
-      const averageAttendance = Math.round(
-        students.reduce((sum, student) => sum + student.attendance, 0) / totalStudents
-      );
       const excellentPerformers = students.filter(
         student => student.performance === 'Excellent'
       ).length;
       
       return {
         totalStudents,
-        averageAttendance,
         excellentPerformers
       };
     } catch (error) {

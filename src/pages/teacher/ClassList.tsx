@@ -21,7 +21,6 @@ const ClassList: React.FC = () => {
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [classStats, setClassStats] = useState({
     totalStudents: 0,
-    averageAttendance: 0,
     excellentPerformers: 0
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -122,10 +121,6 @@ const ClassList: React.FC = () => {
           return (Number(b.readingLevel) || 0) - (Number(a.readingLevel) || 0);
         case 'readingLevel-asc':
           return (Number(a.readingLevel) || 0) - (Number(b.readingLevel) || 0);
-        case 'attendance-desc':
-          return b.attendance - a.attendance;
-        case 'attendance-asc':
-          return a.attendance - b.attendance;
         case 'performance':
           return a.performance.localeCompare(b.performance);
         default:
@@ -287,8 +282,76 @@ const ClassList: React.FC = () => {
   const handleViewProfile = async (studentId: string) => {
     setLoadingStudentId(studentId);
     try {
-      // No need to call showInfo here, as it's not used in the new implementation
-    } finally {
+      // Fetch the student object
+      const student = students.find(s => s.id === studentId);
+      if (!student) {
+        showError('Not Found', 'Student not found.');
+        setLoadingStudentId(null);
+        return;
+      }
+
+      // Prepare parent details if linked
+      let parentDetails: import('../../services/authService').UserProfile | null = null;
+      if (student.parentId) {
+        // Fetch all parents and find the matching one
+        const parents = await getAllParents();
+        parentDetails = parents.find((p: any) => p.id === student.parentId) as import('../../services/authService').UserProfile | null;
+      }
+
+      // Build HTML for modal
+      const studentInfoHtml = `
+        <div class="p-0 sm:p-2 md:p-4 bg-white rounded-b-xl -mt-4">
+          <div class="max-w-2xl mx-auto">
+            <div class="mb-6">
+              <div class="text-lg font-bold text-gray-900 mb-2">Student Details</div>
+              <div class="space-y-2">
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Grade</span><span class="text-gray-900">${student.grade}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Reading Level</span><span class="text-gray-900">${student.readingLevel}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Performance</span><span class="text-gray-900">${student.performance}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Status</span><span class="text-gray-900">${student.status}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Last Assessment</span><span class="text-gray-900">${student.lastAssessment}</span></div>
+              </div>
+            </div>
+            <hr class="my-4" />
+            <div class="mb-2">
+              <div class="text-lg font-bold text-gray-900 mb-2">Parent Details</div>
+              ${parentDetails ? `
+                <div class="space-y-2">
+                  <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${parentDetails.displayName || ''}</span></div>
+                  <div class="flex justify-between"><span class="font-semibold text-gray-700">Email</span><span class="text-gray-900">${parentDetails.email || ''}${parentDetails.email ? ' <span style=\'color:green;\'>&#10003;</span>' : ''}</span></div>
+                  <div class="flex justify-between"><span class="font-semibold text-gray-700">Phone</span><span class="text-gray-900">${parentDetails.phoneNumber || ''}${parentDetails.phoneNumber ? ' <span style=\'color:green;\'>&#10003;</span>' : ''}</span></div>
+                </div>
+              ` : '<div class="italic text-gray-500">No parent linked.</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      setLoadingStudentId(null); // Stop loading before showing modal
+      await Swal.fire({
+        title: 'Student Profile',
+        html: studentInfoHtml,
+        showCloseButton: true,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'rounded-xl shadow-2xl',
+          title: 'text-white text-xl font-semibold',
+        },
+        width: '40rem',
+        backdrop: 'rgba(0,0,0,0.6)',
+        background: '#fff',
+        didOpen: (modalElement) => {
+          const title = modalElement.querySelector('.swal2-title') as HTMLElement;
+          if (title) {
+            title.style.background = '#34495E';
+            title.style.padding = '1rem 1.5rem';
+            title.style.borderRadius = '0.75rem 0.75rem 0 0';
+          }
+        },
+      });
+    } catch (error) {
+      showError('Error', 'Failed to load student details.');
       setLoadingStudentId(null);
     }
   };
@@ -680,7 +743,7 @@ const ClassList: React.FC = () => {
     // Set loading state *after* preConfirm, just before API call
     try {
       const { value: formValues } = await Swal.fire({
-        title: 'Create New Grade',
+        title: 'Create New Class',
         customClass: {
           popup: 'rounded-xl shadow-2xl',
           title: 'text-white text-xl font-semibold',
@@ -718,7 +781,7 @@ const ClassList: React.FC = () => {
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isCreatingGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-white border-solid rounded-full animate-spin"></span> Creating...' : 'Create Grade',
+        confirmButtonText: isCreatingGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-white border-solid rounded-full animate-spin"></span> Creating...' : 'Create Grade',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
         allowOutsideClick: !isCreatingGrade,
@@ -969,6 +1032,13 @@ const ClassList: React.FC = () => {
   const handleAddStudentsToGrade = async (gradeId: string, gradeName: string) => {
     setLoadingAddStudentToGradeId(gradeId); // Set loading for the icon here
     try {
+      // Fetch all parents
+      const parents: { id: string; name: string; email: string }[] = (await getAllParents()).map((p: any) => ({
+        id: p.id,
+        name: p.displayName || p.name || '',
+        email: p.email || '',
+      }));
+
       const { value: formValues } = await Swal.fire({
         title: `Add Student to ${gradeName}`,
         customClass: {
@@ -996,13 +1066,16 @@ const ClassList: React.FC = () => {
               </select>
             </div>
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Parent Name (optional)</label>
-              <input id="student-parent-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="e.g., Maria Dela Cruz">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Parent (optional)</label>
+              <select id="student-parent-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">No parent</option>
+                ${parents.map(p => `<option value="${p.id}">${p.name} (${p.email})</option>`).join('')}
+              </select>
             </div>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isAddingStudentToGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-white border-solid rounded-full animate-spin"></span> Adding...' : 'Add',
+        confirmButtonText: isAddingStudentToGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-t-2 border-r-2 border-white border-solid rounded-full animate-spin"></span> Adding...</span>' : 'Add',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
         allowOutsideClick: !isAddingStudentToGrade,
@@ -1023,13 +1096,14 @@ const ClassList: React.FC = () => {
 
           const name = (document.getElementById('student-name') as HTMLInputElement).value.trim();
           const readingLevel = (document.getElementById('student-reading-level') as HTMLSelectElement).value;
-          const parentName = (document.getElementById('student-parent-name') as HTMLInputElement).value.trim();
+          const parentId = (document.getElementById('student-parent-id') as HTMLSelectElement).value;
+          const parent = parents.find(p => p.id === parentId);
           if (!name || !readingLevel) {
             Swal.showValidationMessage('Please fill in all required fields');
             setIsAddingStudentToGrade(false); // Reset if validation fails
             return false;
           }
-          return { name, readingLevel, parentName };
+          return { name, readingLevel, parentId: parentId || undefined, parentName: parent ? parent.name : '' };
         }
       });
 
@@ -1043,6 +1117,7 @@ const ClassList: React.FC = () => {
           lastAssessment: new Date().toISOString().split('T')[0],
           status: 'active' as const,
           teacherId: currentUser?.uid || '',
+          parentId: formValues.parentId || undefined,
           parentName: formValues.parentName || '',
           performance: 'Good' as Student['performance'],
         };
@@ -1255,8 +1330,6 @@ const ClassList: React.FC = () => {
                     <option value="name-desc">Name (Z-A)</option>
                     <option value="readingLevel-desc">Reading Level (High to Low)</option>
                     <option value="readingLevel-asc">Reading Level (Low to High)</option>
-                    <option value="attendance-desc">Attendance (High to Low)</option>
-                    <option value="attendance-asc">Attendance (Low to High)</option>
                     <option value="performance">Performance (A-Z)</option>
                   </select>
                 </div>
@@ -1391,15 +1464,12 @@ const ClassList: React.FC = () => {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{student.grade}</div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center">
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center">
                               {student.parentId ? (
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm text-gray-900">{student.parentName}</span>
-                                  <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                                    Linked
-                                  </span>
-                                </div>
+                                <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                  Linked
+                                </span>
                               ) : (
                                 <button
                                   onClick={() => student.id && handleLinkParent(student.id)}
@@ -1433,13 +1503,9 @@ const ClassList: React.FC = () => {
                                 onClick={() => student.id && handleEditStudent(student.id)}
                                 className="text-indigo-600 hover:text-indigo-900"
                                 title="Edit Student"
-                                disabled={loadingStudentId === student.id || !canManage}
+                                disabled={!canManage}
                               >
-                                {loadingStudentId === student.id ? (
-                                  <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                ) : (
                                   <i className="fas fa-edit"></i>
-                                )}
                               </button>
                               <button
                                 onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
