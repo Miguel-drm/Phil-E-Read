@@ -33,19 +33,19 @@ export const storyApi = {
 
   // Search stories
   searchStories: async (query: string) => {
-    const response = await axios.get(`${API_BASE_URL}/api/stories/search`, { params: { q: query } });
+    const response = await axios.get(`${API_BASE_URL}/stories/search`, { params: { q: query } });
     return response.data;
   },
 
   // Get a single story by ID
   getStoryById: async (id: string) => {
-    const response = await axios.get(`${API_BASE_URL}/api/stories/${id}`);
+    const response = await axios.get(`${API_BASE_URL}/stories/${id}`);
     return response.data;
   },
 
   // Download PDF
   downloadPDF: async (id: string) => {
-    const response = await axios.get(`${API_BASE_URL}/api/stories/${id}/pdf`, {
+    const response = await axios.get(`${API_BASE_URL}/stories/${id}/pdf`, {
       responseType: 'blob'
     });
     return response.data;
@@ -53,7 +53,7 @@ export const storyApi = {
 
   // Create a new story
   createStory: async (storyData: FormData) => {
-    const response = await axios.post(`${API_BASE_URL}/api/stories`, storyData, {
+    const response = await axios.post(`${API_BASE_URL}/stories`, storyData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -63,7 +63,7 @@ export const storyApi = {
 
   // Update a story
   updateStory: async (id: string, storyData: FormData) => {
-    const response = await axios.put(`${API_BASE_URL}/api/stories/${id}`, storyData, {
+    const response = await axios.put(`${API_BASE_URL}/stories/${id}`, storyData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -73,7 +73,7 @@ export const storyApi = {
 
   // Delete a story
   deleteStory: async (id: string) => {
-    const response = await axios.delete(`${API_BASE_URL}/api/stories/${id}`);
+    const response = await axios.delete(`${API_BASE_URL}/stories/${id}`);
     return response.data;
   }
 };
