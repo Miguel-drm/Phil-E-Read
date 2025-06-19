@@ -30,7 +30,13 @@ export default function StoriesManagement() {
       const storiesData = await UnifiedStoryService.getInstance().getStories(
         filters.language ? { language: filters.language } : {}
       );
-      setStories(Array.isArray(storiesData) ? storiesData : []);
+      console.log('API /api/stories response:', storiesData);
+      if (!Array.isArray(storiesData)) {
+        console.error('API did not return an array:', storiesData);
+        setStories([]);
+      } else {
+        setStories(storiesData);
+      }
     } catch (error) {
       console.error('Error loading stories:', error);
       Swal.fire('Error', 'Failed to load stories', 'error');
