@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { studentService, type Student, type ImportedStudent } from '../../services/studentService';
-import { gradeService, type ClassGrade } from '../../services/gradeService';
+import { gradeService, type ClassGrade, subscribeToStudentsInGrade } from '../../services/gradeService';
 import * as XLSX from 'xlsx';
 import { showInfo, showError, showSuccess, showConfirmation } from '../../services/alertService';
 import Swal from 'sweetalert2';
@@ -37,6 +37,8 @@ const ClassList: React.FC = () => {
   const [isCreatingGrade, setIsCreatingGrade] = useState(false);
   const [isAddingStudentToGrade, setIsAddingStudentToGrade] = useState(false);
   const [isDeletingSelectedGrades, setIsDeletingSelectedGrades] = useState(false);
+  const [gradeStudentIds, setGradeStudentIds] = useState<string[]>([]);
+  const gradeSubscriptionRef = useRef<(() => void) | undefined>(undefined);
 
   // Helper function to check if the current user has management permissions
   const canManage = (userRole === 'teacher' || userRole === 'admin') && isProfileComplete;
@@ -599,22 +601,94 @@ const ClassList: React.FC = () => {
   // Handle grade selection
   const handleGradeSelect = async (gradeId: string) => {
     if (selectedGrade === gradeId) {
-      // Do nothing if the same class is clicked
-      return;
+      return; // Do nothing if the same class is clicked
     }
     setSelectedGrade(gradeId);
+
+    // Clear grade students when selecting "all"
+    if (gradeId === 'all') {
+      setGradeStudentIds([]);
+      if (gradeSubscriptionRef.current) {
+        gradeSubscriptionRef.current();
+        gradeSubscriptionRef.current = undefined;
+      }
+      return;
+    }
+
     try {
-      // Get students in the grade's subcollection
-      const studentsInGrade = await gradeService.getStudentsInGrade(gradeId);
-      const studentIds = studentsInGrade.map(s => s.studentId);
-      // Only show students in the main collection that are also in the grade's subcollection
-      const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
-      setStudents(gradeStudents);
+      // Unsubscribe from previous grade subscription if exists
+      if (gradeSubscriptionRef.current) {
+        gradeSubscriptionRef.current();
+      }
+
+      // Subscribe to real-time updates for students in the selected grade
+      gradeSubscriptionRef.current = subscribeToStudentsInGrade(gradeId, (studentsInGrade) => {
+        console.log('Received real-time update for grade students:', studentsInGrade);
+        const studentIds = studentsInGrade.map(s => s.studentId);
+        setGradeStudentIds(studentIds);
+      });
+
+      // Initial load of students in grade
+      const initialStudents = await gradeService.getStudentsInGrade(gradeId);
+      const initialStudentIds = initialStudents.map(s => s.studentId);
+      setGradeStudentIds(initialStudentIds);
     } catch (error) {
       console.error('Error loading students for grade:', error);
       showError('Error', 'Failed to load students for this grade');
     }
   };
+
+  // Calculate displayed students based on selected grade and filters
+  const displayedStudents = useMemo(() => {
+    // Helper to get surname initial (or first name if only one part)
+    const getSurnameInitial = (fullName: string) => {
+      const parts = fullName.trim().split(/\s+/);
+      if (parts.length > 1) {
+        return parts[parts.length - 1][0].toUpperCase(); // Surname initial
+      }
+      return parts[0][0].toUpperCase(); // Only one name
+    };
+
+    // First, filter by selected grade
+    let filtered = students;
+    if (selectedGrade && selectedGrade !== 'all') {
+      filtered = students.filter(student => student.id && gradeStudentIds.includes(student.id));
+    }
+
+    // Then apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(student => {
+        const matchesName = student.name.toLowerCase().includes(query);
+        const matchesGrade = String(student.grade).toLowerCase().includes(query);
+        const matchesPerformance = student.performance?.toLowerCase().includes(query) || false;
+        return matchesName || matchesGrade || matchesPerformance;
+      });
+    }
+
+    // Apply performance filter
+    if (selectedFilter !== 'all') {
+      filtered = filtered.filter(student => student.performance === selectedFilter);
+    }
+
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return getSurnameInitial(a.name).localeCompare(getSurnameInitial(b.name), undefined, { sensitivity: 'base' });
+        case 'name-desc':
+          return getSurnameInitial(b.name).localeCompare(getSurnameInitial(a.name), undefined, { sensitivity: 'base' });
+        case 'readingLevel-desc':
+          return (parseFloat(b.readingLevel) || 0) - (parseFloat(a.readingLevel) || 0);
+        case 'readingLevel-asc':
+          return (parseFloat(a.readingLevel) || 0) - (parseFloat(b.readingLevel) || 0);
+        case 'performance':
+          return (a.performance || '').localeCompare(b.performance || '', undefined, { sensitivity: 'base' });
+        default:
+          return 0;
+      }
+    });
+  }, [students, gradeStudentIds, selectedGrade, searchQuery, selectedFilter, sortBy]);
 
   // View grade details
   const handleViewGrade = async (gradeId: string, gradeName: string) => {
@@ -1117,19 +1191,28 @@ const ClassList: React.FC = () => {
 
       if (formValues) {
         // Logic to add the student
-        const newStudent = {
-          name: formValues.name,
-          grade: gradeName,
-          readingLevel: formValues.readingLevel,
-          attendance: 0,
-          lastAssessment: new Date().toISOString().split('T')[0],
-          status: 'active' as const,
-          teacherId: currentUser?.uid || '',
-          parentId: formValues.parentId || undefined,
-          parentName: formValues.parentName || '',
-          performance: 'Good' as Student['performance'],
-        };
-        const studentId = await studentService.addStudent(newStudent);
+        // Check if student already exists in the main students collection for this teacher and grade
+        let existingStudent = students.find(
+          s => s.name.trim().toLowerCase() === formValues.name.trim().toLowerCase() && s.grade === gradeName
+        );
+        let studentId: string;
+        if (!existingStudent) {
+          const newStudent = {
+            name: formValues.name,
+            grade: gradeName,
+            readingLevel: formValues.readingLevel,
+            attendance: 0,
+            lastAssessment: new Date().toISOString().split('T')[0],
+            status: 'active' as const,
+            teacherId: currentUser?.uid || '',
+            parentId: formValues.parentId || undefined,
+            parentName: formValues.parentName || '',
+            performance: 'Good' as Student['performance'],
+          };
+          studentId = await studentService.addStudent(newStudent);
+        } else {
+          studentId = existingStudent.id!;
+        }
         await gradeService.addStudentToGrade(gradeId, { studentId, name: formValues.name });
         showSuccess('Student Added', `${formValues.name} has been added to ${gradeName}.`);
         await loadStudents();
@@ -1146,53 +1229,33 @@ const ClassList: React.FC = () => {
     }
   };
 
-  const displayedStudents = useMemo(() => {
-    // Helper to get surname initial (or first name if only one part)
-    const getSurnameInitial = (fullName: string) => {
-      const parts = fullName.trim().split(/\s+/);
-      if (parts.length > 1) {
-        return parts[parts.length - 1][0].toUpperCase(); // Surname initial
-      }
-      return parts[0][0].toUpperCase(); // Only one name
-    };
-    let filtered: Student[] = [];
+  // Subscribe to students in the selected grade in real time
+  useEffect(() => {
     if (!selectedGrade || selectedGrade === 'all') {
-      filtered = [...students];
-    } else {
-      const gradeObj = grades.find(g => g.id === selectedGrade);
-      if (!gradeObj) return [];
-      filtered = students.filter(student => student.grade === gradeObj.name);
-    }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(student => {
-        const matchesName = student.name.toLowerCase().includes(query);
-        const matchesGrade = String(student.grade).toLowerCase().includes(query);
-        const matchesPerformance = student.performance?.toLowerCase().includes(query) || false;
-        return matchesName || matchesGrade || matchesPerformance;
-      });
-    }
-    if (selectedFilter !== 'all') {
-      filtered = filtered.filter(student => student.performance === selectedFilter);
-    }
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name-asc':
-          return getSurnameInitial(a.name).localeCompare(getSurnameInitial(b.name), undefined, { sensitivity: 'base' });
-        case 'name-desc':
-          return getSurnameInitial(b.name).localeCompare(getSurnameInitial(a.name), undefined, { sensitivity: 'base' });
-        case 'readingLevel-desc':
-          return (parseFloat(b.readingLevel) || 0) - (parseFloat(a.readingLevel) || 0);
-        case 'readingLevel-asc':
-          return (parseFloat(a.readingLevel) || 0) - (parseFloat(b.readingLevel) || 0);
-        case 'performance':
-          return (a.performance || '').localeCompare(b.performance || '', undefined, { sensitivity: 'base' });
-        default:
-          return 0;
+      setGradeStudentIds([]);
+      if (gradeSubscriptionRef.current) {
+        gradeSubscriptionRef.current();
+        gradeSubscriptionRef.current = undefined;
       }
+      return;
+    }
+    // Unsubscribe from previous
+    if (gradeSubscriptionRef.current) {
+      gradeSubscriptionRef.current();
+      gradeSubscriptionRef.current = undefined;
+    }
+    // Subscribe to students in the selected grade
+    gradeSubscriptionRef.current = subscribeToStudentsInGrade(selectedGrade, (studentsInGrade) => {
+      setGradeStudentIds(studentsInGrade.map((s: any) => s.studentId));
     });
-    return filtered;
-  }, [students, grades, selectedGrade, searchQuery, selectedFilter, sortBy]);
+    // Cleanup
+    return () => {
+      if (gradeSubscriptionRef.current) {
+        gradeSubscriptionRef.current();
+        gradeSubscriptionRef.current = undefined;
+      }
+    };
+  }, [selectedGrade]);
 
   if (isLoading) {
     return (
@@ -1204,6 +1267,31 @@ const ClassList: React.FC = () => {
       </div>
     );
   }
+
+  // --- DEBUG PANEL START ---
+  // Add this just before the main return statement
+  const debug = false; // Set to true to show debug info
+  // ... existing code ...
+
+  // --- In your component's return, add this above the main UI ---
+  {debug && (
+    <div style={{ background: '#f9fafb', border: '1px solid #ddd', padding: 12, marginBottom: 16, fontSize: 12 }}>
+      <strong>DEBUG PANEL</strong>
+      <div><b>All students (main collection):</b> {students.length}</div>
+      <pre style={{ maxHeight: 120, overflow: 'auto' }}>{JSON.stringify(students, null, 2)}</pre>
+      <div><b>Grade student IDs (subcollection):</b> {gradeStudentIds.length}</div>
+      <pre style={{ maxHeight: 80, overflow: 'auto' }}>{JSON.stringify(gradeStudentIds, null, 2)}</pre>
+      <div><b>Displayed students:</b> {displayedStudents.length}</div>
+      <pre style={{ maxHeight: 80, overflow: 'auto' }}>{JSON.stringify(displayedStudents, null, 2)}</pre>
+    </div>
+  )}
+  // ... existing code ...
+  // Remove all loadStudents() calls after add/import/delete student actions
+  // ... existing code ...
+  // In useEffect for grade switching, only update gradeStudentIds
+  // ... existing code ...
+  // In displayedStudents, always filter from the full students state
+  // ... existing code ...
 
   return (
     <div className="min-h-screen bg-gray-50">

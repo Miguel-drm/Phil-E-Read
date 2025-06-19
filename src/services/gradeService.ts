@@ -186,17 +186,6 @@ class GradeService {
         gradeName = gradeDoc.data().name;
         teacherId = gradeDoc.data().teacherId;
       }
-      // DEBUG: List all subcollections under the grade
-      if (typeof (docRef as any).listCollections === 'function') {
-        const subcollections = await (docRef as any).listCollections();
-        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
-      } else if (typeof (db as any).listCollections === 'function') {
-        // Fallback for some Firestore SDKs
-        const subcollections = await (db as any).listCollections(docRef);
-        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
-      } else {
-        console.warn('listCollections is not available in this Firestore SDK.');
-      }
       // Delete all students in the subcollection in batches
       const studentsRef = collection(docRef, this.studentsSubcollection);
       let studentsSnap = await getDocs(studentsRef);
@@ -429,4 +418,30 @@ class GradeService {
 }
 
 export const gradeService = new GradeService();
+
+/**
+ * Subscribe to real-time updates for students in a grade's subcollection.
+ * @param gradeId The grade document ID
+ * @param callback Function to call with the array of students in the grade
+ * @returns Unsubscribe function
+ */
+export function subscribeToStudentsInGrade(
+  gradeId: string,
+  callback: (students: GradeStudent[]) => void
+): () => void {
+  const studentsRef = collection(db, 'classGrades', gradeId, 'students');
+  
+  return onSnapshot(studentsRef, (snapshot) => {
+    const students = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      gradeId // Include the gradeId for reference
+    })) as GradeStudent[];
+    
+    callback(students);
+  }, (error) => {
+    console.error('Error in grade students subscription:', error);
+  });
+}
+
 export default gradeService;
