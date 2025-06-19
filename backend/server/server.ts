@@ -34,7 +34,7 @@ const upload = multer({
 // Middleware
 app.use(cors({
   origin: isProduction
-    ? 'https://your-frontend.onrender.com'
+    ? 'https://phil-e-read-7p2c.onrender.com'
     : 'http://localhost:5000', // or whatever your local frontend port is
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],

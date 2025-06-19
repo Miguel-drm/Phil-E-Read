@@ -20,7 +20,16 @@ export default defineConfig({
   build: {
     commonjsOptions: {
       include: [/node_modules/]
-    }
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Example: split vendor code
+          vendor: ['react', 'react-dom'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
   },
   resolve: {
     alias: {
