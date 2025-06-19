@@ -30,7 +30,7 @@ export default function StoriesManagement() {
       const storiesData = await UnifiedStoryService.getInstance().getStories(
         filters.language ? { language: filters.language } : {}
       );
-      setStories(storiesData);
+      setStories(Array.isArray(storiesData) ? storiesData : []);
     } catch (error) {
       console.error('Error loading stories:', error);
       Swal.fire('Error', 'Failed to load stories', 'error');
@@ -131,10 +131,10 @@ export default function StoriesManagement() {
         <div className="text-center py-4">Loading...</div>
       ) : (
         <div className="grid gap-6">
-          {stories.length === 0 ? (
+          {Array.isArray(stories) && stories.length === 0 ? (
             <div className="text-center text-gray-500 py-10">No stories available.</div>
           ) : (
-            stories.map((story) => (
+            (Array.isArray(stories) ? stories : []).map((story) => (
               <div key={story._id} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start">
                   <div>
