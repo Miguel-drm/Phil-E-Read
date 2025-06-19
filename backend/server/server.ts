@@ -89,7 +89,27 @@ app.use(express.json());
         
         const stories = await mongoStoryService.getStories(filters);
         console.log('Stories found:', stories.length);
-        res.json(stories);
+
+        // Fix pdfUrl and categories for each story
+        const baseUrl = isProduction
+          ? 'https://phil-e-read-1.onrender.com'
+          : `http://localhost:${PORT}`;
+
+        const fixedStories = stories.map(story => {
+          // Ensure categories is always an array of strings
+          let categories: string[] = [];
+          if (Array.isArray(story.categories)) {
+            categories = story.categories.filter((cat): cat is string => typeof cat === 'string');
+          }
+
+          return {
+            ...story.toObject(),
+            pdfUrl: `${baseUrl}/api/stories/${story._id}/pdf`,
+            categories,
+          };
+        });
+
+        res.json(fixedStories);
       } catch (error) {
         console.error('Detailed error in /api/stories:', error);
         res.status(500).json({ 
