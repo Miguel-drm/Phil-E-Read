@@ -9,6 +9,11 @@ const AdminSidebar: React.FC = () => {
       icon: '📊'
     },
     {
+      path: '/admin/teachers',
+      label: 'Teachers',
+      icon: '🧑‍🏫'
+    },
+    {
       path: '/admin/stories',
       label: 'Stories',
       icon: '📚'

@@ -6,7 +6,6 @@ const Reports: React.FC = () => {
 
   const classStats = {
     totalStudents: 24,
-    averageAttendance: 92.5,
     averageReadingLevel: 2.3,
     totalReadingSessions: 156,
     completedAssessments: 89,
@@ -19,7 +18,6 @@ const Reports: React.FC = () => {
       name: 'Emma Wilson',
       readingLevel: 2,
       progress: 85,
-      attendance: 95,
       assessments: 8,
       avgScore: 88,
       trend: 'up'
@@ -29,7 +27,6 @@ const Reports: React.FC = () => {
       name: 'Jack Davis',
       readingLevel: 1,
       progress: 65,
-      attendance: 88,
       assessments: 6,
       avgScore: 72,
       trend: 'up'
@@ -39,7 +36,6 @@ const Reports: React.FC = () => {
       name: 'Sarah Miller',
       readingLevel: 2,
       progress: 78,
-      attendance: 92,
       assessments: 9,
       avgScore: 85,
       trend: 'stable'
@@ -49,7 +45,6 @@ const Reports: React.FC = () => {
       name: 'Tim Wilson',
       readingLevel: 1,
       progress: 45,
-      attendance: 85,
       assessments: 5,
       avgScore: 68,
       trend: 'down'
@@ -57,11 +52,11 @@ const Reports: React.FC = () => {
   ];
 
   const monthlyData = [
-    { month: 'Sep', readingLevel: 1.8, attendance: 89, assessments: 12 },
-    { month: 'Oct', readingLevel: 1.9, attendance: 91, assessments: 15 },
-    { month: 'Nov', readingLevel: 2.1, attendance: 93, assessments: 18 },
-    { month: 'Dec', readingLevel: 2.2, attendance: 92, assessments: 14 },
-    { month: 'Jan', readingLevel: 2.3, attendance: 92.5, assessments: 16 }
+    { month: 'Sep', readingLevel: 1.8 },
+    { month: 'Oct', readingLevel: 1.9 },
+    { month: 'Nov', readingLevel: 2.1 },
+    { month: 'Dec', readingLevel: 2.2 },
+    { month: 'Jan', readingLevel: 2.3 }
   ];
 
   const handleExportReport = (reportType: string) => {
@@ -183,18 +178,6 @@ const Reports: React.FC = () => {
             
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <i className="fas fa-chart-line text-green-600 text-xl"></i>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm text-gray-600">Average Attendance</p>
-                  <p className="text-2xl font-bold text-gray-900">{classStats.averageAttendance}%</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <i className="fas fa-book text-purple-600 text-xl"></i>
                 </div>
@@ -256,24 +239,7 @@ const Reports: React.FC = () => {
                           <span>Reading Level</span>
                           <span>{data.readingLevel}</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(data.readingLevel / 3) * 100}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>Attendance</span>
-                          <span>{data.attendance}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-green-600 h-2 rounded-full" 
-                            style={{ width: `${data.attendance}%` }}
-                          ></div>
-                        </div>
+                        {/* Remove progress bar for readingLevel as a number */}
                       </div>
                     </div>
                   </div>
@@ -312,9 +278,6 @@ const Reports: React.FC = () => {
                     Progress
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Attendance
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Assessments
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -340,7 +303,7 @@ const Reports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        Level {student.readingLevel}
+                        {student.readingLevel}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -355,9 +318,6 @@ const Reports: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.attendance}%
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {student.assessments}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -370,44 +330,6 @@ const Reports: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Attendance Report */}
-      {selectedReport === 'attendance' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Attendance Report</h2>
-            <button
-              onClick={() => handleGenerateReport('attendance')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <i className="fas fa-file-alt mr-2"></i>
-              Generate Report
-            </button>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center py-8">
-              <i className="fas fa-calendar-check text-4xl text-gray-400 mb-4"></i>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Attendance Analytics</h3>
-              <p className="text-gray-600 mb-4">Detailed attendance tracking and analysis will be available in the next update.</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-2xl font-bold text-blue-600">{classStats.averageAttendance}%</p>
-                  <p className="text-sm text-gray-600">Average Attendance</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <p className="text-2xl font-bold text-green-600">{classStats.totalStudents}</p>
-                  <p className="text-sm text-gray-600">Total Students</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <p className="text-2xl font-bold text-purple-600">156</p>
-                  <p className="text-sm text-gray-600">Sessions This Period</p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}

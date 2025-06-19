@@ -11,10 +11,13 @@ import {
   orderBy,
   Timestamp,
   serverTimestamp,
-  collectionGroup
+  collectionGroup,
+  writeBatch,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
+import * as StudentServiceModule from './studentService'; // Import as a namespace
 
 export interface ClassGrade {
   id?: string;
@@ -24,8 +27,8 @@ export interface ClassGrade {
   studentCount: number;
   color: string; // e.g., "blue", "green", "yellow"
   isActive: boolean;
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
+  createdAt?: any;
+  updatedAt?: any;
   teacherId?: string; // To associate grades with specific teachers
 }
 
@@ -140,20 +143,69 @@ class GradeService {
   async updateGrade(gradeId: string, updateData: Partial<ClassGrade>): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, gradeId);
+      const gradeDoc = await getDoc(docRef);
+
+      if (!gradeDoc.exists()) {
+        throw new Error('Grade not found or no permission to access');
+      }
+
       await updateDoc(docRef, {
         ...updateData,
         updatedAt: serverTimestamp(),
       });
+
+      // If the grade name was updated, also update the grade name for all associated students
+      if (updateData.name) {
+        const currentStudentsInGrade = await this.getStudentsInGrade(gradeId);
+        if (currentStudentsInGrade.length > 0) {
+          const batch = writeBatch(db);
+
+          for (const studentRef of currentStudentsInGrade) {
+            // Update the 'grade' field in the main student collection
+            const studentDocRef = doc(db, StudentServiceModule.studentService.getCollectionName(), studentRef.studentId);
+            batch.update(studentDocRef, { grade: updateData.name });
+          }
+          await batch.commit();
+        }
+      }
     } catch (error) {
       console.error('Error updating grade:', error);
       throw new Error('Failed to update class grade');
     }
   }
 
-  // Delete a class grade
+  // Delete a class grade (with subcollection cleanup, batched, and debug log)
   async deleteGrade(gradeId: string): Promise<void> {
     try {
       const docRef = doc(db, this.collectionName, gradeId);
+      // DEBUG: List all subcollections under the grade
+      if (typeof (docRef as any).listCollections === 'function') {
+        const subcollections = await (docRef as any).listCollections();
+        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
+      } else if (typeof (db as any).listCollections === 'function') {
+        // Fallback for some Firestore SDKs
+        const subcollections = await (db as any).listCollections(docRef);
+        console.log('Subcollections under grade', gradeId, ':', subcollections.map((c: any) => c.id));
+      } else {
+        console.warn('listCollections is not available in this Firestore SDK.');
+      }
+      // Delete all students in the subcollection in batches
+      const studentsRef = collection(docRef, this.studentsSubcollection);
+      let studentsSnap = await getDocs(studentsRef);
+      const BATCH_SIZE = 400;
+      while (!studentsSnap.empty) {
+        const batch = writeBatch(db);
+        let count = 0;
+        studentsSnap.forEach((studentDoc) => {
+          if (count < BATCH_SIZE) {
+            batch.delete(studentDoc.ref);
+            count++;
+          }
+        });
+        await batch.commit();
+        studentsSnap = await getDocs(studentsRef);
+      }
+      // Now delete the grade document
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting grade:', error);
@@ -291,33 +343,18 @@ class GradeService {
   // Get all students in a grade
   async getStudentsInGrade(gradeId: string): Promise<GradeStudent[]> {
     try {
-      // Log authentication state
-      const auth = getAuth();
-      console.log('Current user:', auth.currentUser);
-      console.log('Getting students for grade:', gradeId);
-      
-      if (!auth.currentUser) {
-        throw new Error('No authenticated user');
-      }
-
+      // Removed auth.currentUser check to allow admin access
       const gradeRef = doc(db, this.collectionName, gradeId);
       const studentsRef = collection(gradeRef, this.studentsSubcollection);
       const q = query(studentsRef, orderBy('name'));
-      
-      console.log('Executing query for students in grade...');
       const querySnapshot = await getDocs(q);
-      console.log('Found students:', querySnapshot.size);
-      
       const students = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as GradeStudent[];
-      
-      console.log('Processed student data:', students);
       return students;
     } catch (error) {
       console.error('Error getting students in grade:', error);
-      // Add more detailed error information
       if (error instanceof Error) {
         console.error('Error details:', {
           name: error.name,
@@ -343,6 +380,34 @@ class GradeService {
       throw new Error('Failed to check if student is in grade');
     }
   }
+
+  async getAllClassGrades(): Promise<ClassGrade[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ClassGrade[];
+    } catch (error) {
+      console.error('Error getting all class grades:', error);
+      throw new Error('Failed to fetch all class grades');
+    }
+  }
+
+  async getStudentsByGrade(gradeId: string): Promise<StudentServiceModule.Student[]> {
+    try {
+      const studentsCollectionRef = collection(db, this.collectionName, gradeId, 'students');
+      const querySnapshot = await getDocs(studentsCollectionRef);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as StudentServiceModule.Student[];
+    } catch (error) {
+      console.error(`Error getting students for grade ${gradeId}:`, error);
+      throw new Error(`Failed to fetch students for grade ${gradeId}`);
+    }
+  }
 }
 
 export const gradeService = new GradeService();
+export default gradeService;

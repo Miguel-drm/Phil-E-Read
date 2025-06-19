@@ -208,10 +208,9 @@ const MakeTest: React.FC = () => {
                   onChange={(e) => setSelectedLevel(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="level1">Level 1 (Beginner)</option>
-                  <option value="level2">Level 2 (Intermediate)</option>
-                  <option value="level3">Level 3 (Advanced)</option>
-                  <option value="level4">Level 4 (Expert)</option>
+                  <option value="level1">Independent</option>
+                  <option value="level2">Instructional</option>
+                  <option value="level3">Frustrational</option>
                 </select>
               </div>
             </div>

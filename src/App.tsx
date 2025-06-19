@@ -6,11 +6,14 @@ import RoleBasedRedirect from './components/auth/RoleBasedRedirect';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 import StoriesManagement from './pages/admin/StoriesManagement';
+import Teachers from './pages/admin/Teachers';
+import Students from './pages/admin/Students';
 
 // Dashboard Pages
 import AdminDashboardPage from './pages/admin/AdminDashboard';
 import TeacherDashboardPage from './pages/teacher/TeacherDashboard';
 import ParentDashboardPage from './pages/parent/ParentDashboard';
+import MyChildrenPage from './pages/parent/MyChildren';
 
 // Teacher Pages
 import Reading from './pages/teacher/Reading';
@@ -19,6 +22,12 @@ import MakeTest from './pages/teacher/MakeTest';
 import Reports from './pages/teacher/Reports';
 import Profile from './pages/teacher/Profile';
 import ReadingSessionPage from './pages/teacher/ReadingSessionPage';
+
+// Parent Pages
+import ProgressPage from './pages/parent/Progress';
+import AssignmentsPage from './pages/parent/Assignments';
+import ReportsPage from './pages/parent/Reports';
+import ParentProfilePage from './pages/parent/Profile';
 
 const App: React.FC = () => {
   return (
@@ -40,7 +49,9 @@ const App: React.FC = () => {
                 <DashboardLayout>
                   <Routes>
                     <Route path="dashboard" element={<AdminDashboardPage />} />
+                    <Route path="teachers" element={<Teachers />} />
                     <Route path="stories" element={<StoriesManagement />} />
+                    <Route path="students" element={<Students />} />
                     {/* Add more admin routes here */}
                   </Routes>
                 </DashboardLayout>
@@ -76,6 +87,11 @@ const App: React.FC = () => {
                 <DashboardLayout>
                   <Routes>
                     <Route path="dashboard" element={<ParentDashboardPage />} />
+                    <Route path="children" element={<MyChildrenPage />} />
+                    <Route path="progress" element={<ProgressPage />} />
+                    <Route path="assignments" element={<AssignmentsPage />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="profile" element={<ParentProfilePage />} />
                     {/* Add more parent routes here */}
                   </Routes>
                 </DashboardLayout>

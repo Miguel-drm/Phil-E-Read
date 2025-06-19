@@ -146,8 +146,8 @@ const Reading: React.FC = () => {
         confirmButtonText: 'Start Session',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
+        backdrop: 'rgba(0,0,0,0.6)',
         customClass: {
-          container: 'reading-session-modal',
           popup: 'rounded-lg shadow-xl',
           title: 'text-xl font-semibold text-gray-900',
           confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md',
@@ -303,8 +303,8 @@ const Reading: React.FC = () => {
       confirmButtonText: 'Save Changes',
       cancelButtonText: 'Cancel',
       focusConfirm: false,
+      backdrop: 'rgba(0,0,0,0.6)',
       customClass: {
-        container: 'reading-session-modal',
         popup: 'rounded-lg shadow-xl',
         title: 'text-xl font-semibold text-gray-900',
         confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md',

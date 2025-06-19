@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateUserProfile } from '../../services/authService';
 import { showSuccess, showError, showConfirmation } from '../../services/alertService';
-import Swal from 'sweetalert2'; // Import SweetAlert2 for re-authentication prompt
+import Swal from 'sweetalert2';
 import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../config/firebase';
@@ -22,8 +22,17 @@ const Profile: React.FC = () => {
     displayName: '',
     email: '',
     phoneNumber: '',
-    school: '',
-    gradeLevel: '',
+    address: '',
+    relationshipToChild: '',
+    occupation: '',
+    emergencyContactName: '',
+    emergencyContactNumber: '',
+    preferredContactMethod: '',
+    alternateEmail: '',
+    nationality: '',
+    profilePhoto: '',
+    languagesSpoken: '',
+    notes: '',
   });
 
   const [preferences, setPreferences] = useState({
@@ -44,15 +53,23 @@ const Profile: React.FC = () => {
     }
   });
 
-  // Load user profile data when component mounts or userProfile changes
   useEffect(() => {
     if (userProfile) {
       setProfileData({
         displayName: userProfile.displayName || '',
         email: userProfile.email || '',
         phoneNumber: userProfile.phoneNumber || '',
-        school: userProfile.school || '',
-        gradeLevel: userProfile.gradeLevel || '',
+        address: userProfile.address || '',
+        relationshipToChild: userProfile.relationshipToChild || '',
+        occupation: userProfile.occupation || '',
+        emergencyContactName: userProfile.emergencyContactName || '',
+        emergencyContactNumber: userProfile.emergencyContactNumber || '',
+        preferredContactMethod: userProfile.preferredContactMethod || '',
+        alternateEmail: userProfile.alternateEmail || '',
+        nationality: userProfile.nationality || '',
+        profilePhoto: userProfile.profilePhoto || '',
+        languagesSpoken: userProfile.languagesSpoken || '',
+        notes: userProfile.notes || '',
       });
     }
   }, [userProfile]);
@@ -64,14 +81,20 @@ const Profile: React.FC = () => {
         displayName: profileData.displayName,
         email: profileData.email,
         phoneNumber: profileData.phoneNumber,
-        school: profileData.school,
-        gradeLevel: profileData.gradeLevel,
+        address: profileData.address,
+        relationshipToChild: profileData.relationshipToChild,
+        occupation: profileData.occupation,
+        emergencyContactName: profileData.emergencyContactName,
+        emergencyContactNumber: profileData.emergencyContactNumber,
+        preferredContactMethod: profileData.preferredContactMethod,
+        alternateEmail: profileData.alternateEmail,
+        nationality: profileData.nationality,
+        profilePhoto: profileData.profilePhoto,
+        languagesSpoken: profileData.languagesSpoken,
+        notes: profileData.notes,
       });
-    
-      // Refresh the user profile to get updated data
       await refreshUserProfile();
-      
-    setIsEditing(false);
+      setIsEditing(false);
       showSuccess('Profile Updated', 'Your profile has been updated successfully!');
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -83,7 +106,6 @@ const Profile: React.FC = () => {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    // showInfo('Changes Cancelled', 'Your changes have been discarded.');
   };
 
   const handleChangePassword = async () => {
@@ -91,14 +113,12 @@ const Profile: React.FC = () => {
       showError('Error', 'No user is signed in or email is unavailable.');
       return;
     }
-
     const result = await showConfirmation(
       'Change Password',
       `Send password reset email to ${currentUser.email}?`,
       'Send Email',
       'Cancel'
     );
-    
     if (result.isConfirmed) {
       setIsChangingPassword(true);
       try {
@@ -120,14 +140,7 @@ const Profile: React.FC = () => {
   const handleExportData = async () => {
     setIsExportingData(true);
     try {
-      // In a real application, you would implement the logic here to:
-      // 1. Fetch all relevant user data (profile, class lists, student data, etc.)
-      // 2. Format it (e.g., as JSON, CSV, or an Excel file).
-      // 3. Initiate a download for the user.
-      
-      // Simulate an asynchronous operation
       await new Promise(resolve => setTimeout(resolve, 2000)); 
-      
       showSuccess('Export Started', 'Your data export will be available for download shortly.');
     } catch (error: any) {
       console.error('Error exporting data:', error);
@@ -142,7 +155,6 @@ const Profile: React.FC = () => {
       showError('Error', 'No user is currently signed in.');
       return;
     }
-
     const confirmResult = await showConfirmation(
       'Delete Account',
       'This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?',
@@ -150,7 +162,6 @@ const Profile: React.FC = () => {
       'Cancel',
       'warning'
     );
-    
     if (confirmResult.isConfirmed) {
       const { value: password } = await Swal.fire({
         title: 'Please Confirm Password',
@@ -168,28 +179,21 @@ const Profile: React.FC = () => {
           if (!passwordInput) {
             Swal.showValidationMessage('Password is required.');
           }
-          return passwordInput; // Return the password for further processing
+          return passwordInput;
         },
         allowOutsideClick: () => !Swal.isLoading()
       });
-
       if (password) {
         setIsDeletingAccount(true);
         try {
-          // Re-authenticate user
           const credential = EmailAuthProvider.credential(currentUser.email || '', password);
           await reauthenticateWithCredential(currentUser, credential);
-
-          // Delete user document from Firestore
           if (currentUser.uid) {
             await deleteDoc(doc(db, 'users', currentUser.uid));
           }
-
-          // Delete user from Firebase Auth
           await deleteUser(currentUser);
-
           showSuccess('Account Deleted', 'Your account and all associated data have been permanently deleted.');
-          await signOut(); // Sign out the user after deletion
+          await signOut();
         } catch (error: any) {
           console.error('Error deleting account:', error);
           if (error.code === 'auth/wrong-password') {
@@ -334,28 +338,51 @@ const Profile: React.FC = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  School
+                  Address
                 </label>
                 <input
                   type="text"
-                  value={profileData.school}
-                  onChange={(e) => setProfileData({...profileData, school: e.target.value})}
+                  value={profileData.address}
+                  onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                   disabled={!isEditing}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                 />
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Grade Level
-                </label>
-                <input
-                  type="text"
-                  value={profileData.gradeLevel}
-                  onChange={(e) => setProfileData({...profileData, gradeLevel: e.target.value})}
-                  disabled={!isEditing}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Relationship to Child(ren)</label>
+                <input type="text" value={profileData.relationshipToChild} onChange={(e) => setProfileData({...profileData, relationshipToChild: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Occupation</label>
+                <input type="text" value={profileData.occupation} onChange={(e) => setProfileData({...profileData, occupation: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Name</label>
+                <input type="text" value={profileData.emergencyContactName} onChange={(e) => setProfileData({...profileData, emergencyContactName: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Number</label>
+                <input type="tel" value={profileData.emergencyContactNumber} onChange={(e) => setProfileData({...profileData, emergencyContactNumber: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Contact Method</label>
+                <input type="text" value={profileData.preferredContactMethod} onChange={(e) => setProfileData({...profileData, preferredContactMethod: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alternate Email</label>
+                <input type="email" value={profileData.alternateEmail} onChange={(e) => setProfileData({...profileData, alternateEmail: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nationality</label>
+                <input type="text" value={profileData.nationality} onChange={(e) => setProfileData({...profileData, nationality: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Languages Spoken</label>
+                <input type="text" value={profileData.languagesSpoken} onChange={(e) => setProfileData({...profileData, languagesSpoken: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes / Additional Information</label>
+                <textarea value={profileData.notes} onChange={(e) => setProfileData({...profileData, notes: e.target.value})} disabled={!isEditing} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100" rows={2} />
               </div>
             </div>
           </div>
