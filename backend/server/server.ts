@@ -3,25 +3,18 @@ import type { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import multer from 'multer';
-import connectDB from '../server/utils/db.js';
-import { mongoStoryService } from '../server/services/mongoStoryService.js';
-// import { fileURLToPath } from 'url';
-// import { dirname, join } from 'path';
-import { initGridFSBucket } from '../server/config/gridfsConfig.js';
+import connectDB from './utils/db.js';
+import { mongoStoryService } from './services/mongoStoryService.js';
+import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
-import Story, { IStory } from '../server/models/Story.js';
-
-// // Get the directory name of the current module
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-
-// No need to configure worker in Node.js environment as we're using the legacy build
-// which doesn't require a worker
+import Story, { IStory } from './models/Story.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Configure multer for PDF uploads
 const upload = multer({
@@ -40,7 +33,9 @@ const upload = multer({
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? ['http://localhost:3000', 'http://localhost:5000', process.env.FRONTEND_URL] : ['http://localhost:3000', 'http://localhost:5000'],
+  origin: isProduction
+    ? 'https://your-frontend.onrender.com'
+    : 'http://localhost:5000', // or whatever your local frontend port is
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
