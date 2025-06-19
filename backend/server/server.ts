@@ -8,6 +8,7 @@ import { mongoStoryService } from './services/mongoStoryService.js';
 import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
+import corsOrigins from './config/cors.json' assert { type: 'json' };
 
 dotenv.config();
 
@@ -33,8 +34,11 @@ const upload = multer({
 
 // Middleware
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    const allowedOrigins = require('./config/cors.json').origin;
+  origin: function (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) {
+    const allowedOrigins = corsOrigins.origin;
     if (origin && allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
