@@ -21,7 +21,7 @@ export interface Story {
 export const storyApi = {
   // Get all stories with optional filters
   getStories: async (filters?: { readingLevel?: string; categories?: string[]; language?: string }) => {
-    const response = await axios.get(`${API_BASE_URL}/api/stories`, { params: filters });
+    const response = await axios.get(`${API_BASE_URL}/stories`, { params: filters });
     const stories = response.data;
     const storiesWithPdfUrl = stories.map((story: Story) => ({
       ...story,
