@@ -22,7 +22,13 @@ export const storyApi = {
   // Get all stories with optional filters
   getStories: async (filters?: { readingLevel?: string; categories?: string[]; language?: string }) => {
     const response = await axios.get(`${API_BASE_URL}/stories`, { params: filters });
-    return response.data;
+    const stories = response.data;
+    const storiesWithPdfUrl = stories.map((story: Story) => ({
+      ...story,
+      pdfUrl: `/api/stories/${story._id}/pdf`
+    }));
+    console.log('Stories found:', storiesWithPdfUrl.length);
+    return storiesWithPdfUrl;
   },
 
   // Search stories
