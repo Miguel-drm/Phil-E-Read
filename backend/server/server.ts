@@ -8,7 +8,6 @@ import { mongoStoryService } from './services/mongoStoryService.js';
 import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
-import corsOrigins from './config/cors.json' assert { type: 'json' };
 
 dotenv.config();
 
@@ -33,20 +32,14 @@ const upload = multer({
 });
 
 // Middleware
-const corsOptions = {
-  origin: function (
-    origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void
-  ) {
-    const allowedOrigins = corsOrigins.origin;
-    if (origin && allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  }
-};
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: isProduction
+    ? process.env.FRONTEND_URL
+    : 'http://localhost:5000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // // Serve static files from the frontend's dist directory
