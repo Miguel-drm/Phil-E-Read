@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { studentService, type Student, type ImportedStudent } from '../../services/studentService';
 import { gradeService, type ClassGrade } from '../../services/gradeService';
@@ -12,11 +12,10 @@ const ClassList: React.FC = () => {
   const { currentUser, userRole, isProfileComplete } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
+  const [sortBy, setSortBy] = useState('name-asc');
   const [isImporting, setIsImporting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [importedStudents, setImportedStudents] = useState<ImportedStudent[]>([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [classStats, setClassStats] = useState({
@@ -54,11 +53,6 @@ const ClassList: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser?.uid]);
 
-  // Filter students when search query or filter changes
-  useEffect(() => {
-    filterStudents();
-  }, [students, searchQuery, selectedFilter, sortBy]);
-
   const loadStudents = async () => {
     if (!currentUser?.uid) return;
     try {
@@ -81,56 +75,6 @@ const ClassList: React.FC = () => {
     } catch (error) {
       console.error('Error loading class statistics:', error);
     }
-  };
-
-  const filterStudents = () => {
-    // If no grade is selected or 'all' is selected, filter students should be empty
-    if (!selectedGrade || selectedGrade === 'all') {
-      setFilteredStudents([]);
-      return;
-    }
-
-    const gradeObj = grades.find(g => g.id === selectedGrade);
-    if (!gradeObj) {
-      setFilteredStudents([]);
-      return;
-    }
-
-    // Students shown are those from the main students array that are associated with the selected grade
-    let filtered = students.filter(student => 
-      student.grade === gradeObj.name // Assuming student.grade stores the grade name string
-    );
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(student => {
-        const matchesName = student.name.toLowerCase().includes(query);
-        const matchesGrade = String(student.grade).toLowerCase().includes(query);
-        const matchesPerformance = student.performance?.toLowerCase().includes(query) || false;
-        return matchesName || matchesGrade || matchesPerformance;
-      });
-    }
-    if (selectedFilter !== 'all') {
-      filtered = filtered.filter(student => student.performance === selectedFilter);
-    }
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name-asc':
-          return a.name.localeCompare(b.name);
-        case 'name-desc':
-          return b.name.localeCompare(a.name);
-        case 'readingLevel-desc':
-          // Ensure readingLevel is treated as a number for comparison if possible, or string otherwise
-          return (Number(b.readingLevel) || 0) - (Number(a.readingLevel) || 0);
-        case 'readingLevel-asc':
-          return (Number(a.readingLevel) || 0) - (Number(b.readingLevel) || 0);
-        case 'performance':
-          return a.performance.localeCompare(b.performance);
-        default:
-          return 0;
-      }
-    });
-    setFilteredStudents(filtered);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -445,7 +389,7 @@ const ClassList: React.FC = () => {
     if (result.isConfirmed) {
       setDeletingAllStudents(true);
       try {
-        const ids = filteredStudents.map(s => s.id).filter((id): id is string => Boolean(id));
+        const ids = displayedStudents.map(s => s.id).filter((id): id is string => Boolean(id));
         if (ids.length > 0) {
           await studentService.batchDeleteStudents(ids);
         }
@@ -458,7 +402,6 @@ const ClassList: React.FC = () => {
           showConfirmButton: false
         });
         // Clear filtered students and students arrays after deleting all
-        setFilteredStudents([]);
         setStudents([]);
         await loadStudents(); // Re-fetch to ensure counts are correct if any were missed
         await loadClassStatistics();
@@ -666,7 +609,7 @@ const ClassList: React.FC = () => {
       const studentIds = studentsInGrade.map(s => s.studentId);
       // Only show students in the main collection that are also in the grade's subcollection
       const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
-      setFilteredStudents(gradeStudents);
+      setStudents(gradeStudents);
     } catch (error) {
       console.error('Error loading students for grade:', error);
       showError('Error', 'Failed to load students for this grade');
@@ -971,9 +914,9 @@ const ClassList: React.FC = () => {
           const studentsInGrade = await gradeService.getStudentsInGrade(firstGradeId);
           const studentIds = studentsInGrade.map(s => s.studentId);
           const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
-          setFilteredStudents(gradeStudents);
+          setStudents(gradeStudents);
         } catch (error) {
-          setFilteredStudents([]);
+          setStudents([]);
         }
       })();
     }
@@ -1203,6 +1146,54 @@ const ClassList: React.FC = () => {
     }
   };
 
+  const displayedStudents = useMemo(() => {
+    // Helper to get surname initial (or first name if only one part)
+    const getSurnameInitial = (fullName: string) => {
+      const parts = fullName.trim().split(/\s+/);
+      if (parts.length > 1) {
+        return parts[parts.length - 1][0].toUpperCase(); // Surname initial
+      }
+      return parts[0][0].toUpperCase(); // Only one name
+    };
+    let filtered: Student[] = [];
+    if (!selectedGrade || selectedGrade === 'all') {
+      filtered = [...students];
+    } else {
+      const gradeObj = grades.find(g => g.id === selectedGrade);
+      if (!gradeObj) return [];
+      filtered = students.filter(student => student.grade === gradeObj.name);
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(student => {
+        const matchesName = student.name.toLowerCase().includes(query);
+        const matchesGrade = String(student.grade).toLowerCase().includes(query);
+        const matchesPerformance = student.performance?.toLowerCase().includes(query) || false;
+        return matchesName || matchesGrade || matchesPerformance;
+      });
+    }
+    if (selectedFilter !== 'all') {
+      filtered = filtered.filter(student => student.performance === selectedFilter);
+    }
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return getSurnameInitial(a.name).localeCompare(getSurnameInitial(b.name), undefined, { sensitivity: 'base' });
+        case 'name-desc':
+          return getSurnameInitial(b.name).localeCompare(getSurnameInitial(a.name), undefined, { sensitivity: 'base' });
+        case 'readingLevel-desc':
+          return (parseFloat(b.readingLevel) || 0) - (parseFloat(a.readingLevel) || 0);
+        case 'readingLevel-asc':
+          return (parseFloat(a.readingLevel) || 0) - (parseFloat(b.readingLevel) || 0);
+        case 'performance':
+          return (a.performance || '').localeCompare(b.performance || '', undefined, { sensitivity: 'base' });
+        default:
+          return 0;
+      }
+    });
+    return filtered;
+  }, [students, grades, selectedGrade, searchQuery, selectedFilter, sortBy]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1372,7 +1363,7 @@ const ClassList: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <h3 className="text-lg font-semibold text-gray-900">Students</h3>
                   <span className="px-2 py-1 text-sm font-medium text-gray-600 bg-gray-100 rounded-full">
-                    {(selectedGrade && selectedGrade !== 'all') ? filteredStudents.length : 0} students
+                    {(selectedGrade && selectedGrade !== 'all') ? displayedStudents.length : 0} students
                   </span>
                 </div>
                 <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
@@ -1445,7 +1436,7 @@ const ClassList: React.FC = () => {
               </div>
               {/* Students List */}
               <div className="flex-1 overflow-auto">
-                {filteredStudents.length === 0 ? (
+                {displayedStudents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full bg-gray-50">
                     <div className="text-center p-8">
                       <i className="fas fa-search text-4xl text-gray-400 mb-4"></i>
@@ -1466,7 +1457,7 @@ const ClassList: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredStudents.map((student) => (
+                      {displayedStudents.map((student) => (
                         <tr key={student.id} className="hover:bg-blue-50 transition-colors">
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center">

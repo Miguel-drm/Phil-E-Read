@@ -7,7 +7,7 @@ interface StatCard {
   iconColor: string;
   bgColor: string;
   change: string;
-  changeType: 'positive' | 'negative' | 'neutral';
+  changeType: 'positive' | 'negative' | 'neutral' | 'students';
 }
 
 interface StatsCardsProps {
@@ -21,6 +21,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
         return 'fas fa-arrow-up';
       case 'negative':
         return 'fas fa-arrow-down';
+      case 'students':
+        return 'fas fa-users';
       default:
         return 'fas fa-exclamation-circle';
     }
@@ -32,6 +34,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
         return 'text-emerald-600';
       case 'negative':
         return 'text-red-600';
+      case 'students':
+        return 'text-blue-700';
       default:
         return 'text-amber-600';
     }
@@ -43,6 +47,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
         return 'bg-emerald-50';
       case 'negative':
         return 'bg-red-50';
+      case 'students':
+        return 'bg-blue-50';
       default:
         return 'bg-amber-50';
     }
@@ -67,8 +73,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
               </div>
             </div>
             <div className={`mt-4 flex items-center ${getChangeBgColor(stat.changeType)} rounded-lg px-3 py-2`}>
-              <i className={`${getChangeIcon(stat.changeType)} mr-2 text-sm ${getChangeColor(stat.changeType)}`}></i>
-              <span className={`text-xs sm:text-sm font-medium ${getChangeColor(stat.changeType)} truncate`}>
+              <i className={`${getChangeIcon(stat.changeType)} mr-2 text-base align-middle ${getChangeColor(stat.changeType)}`}></i>
+              <span className={`text-xs sm:text-sm font-medium ${getChangeColor(stat.changeType)} truncate align-middle`} style={{lineHeight: '1.5', verticalAlign: 'middle'}}>
                 {stat.change}
               </span>
             </div>

@@ -123,8 +123,14 @@ class StudentService {
   // Add a new student
   async addStudent(studentData: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
-      const docRef = await addDoc(collection(db, this.collectionName), {
+      // Ensure parentId and parentName are not undefined
+      const cleanData = {
         ...studentData,
+        parentId: studentData.parentId ?? null,
+        parentName: studentData.parentName ?? null,
+      };
+      const docRef = await addDoc(collection(db, this.collectionName), {
+        ...cleanData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });

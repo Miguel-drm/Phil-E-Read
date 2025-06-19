@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import StatsCards from './StatsCards';
 import PerformanceChart from './PerformanceChart';
 import UpcomingSessions from './UpcomingSessions';
+import { useAuth } from '../../../contexts/AuthContext';
+import { studentService } from '../../../services/studentService';
 
 const TeacherDashboard: React.FC = () => {
+  const { currentUser } = useAuth();
+  const [totalStudents, setTotalStudents] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mock data - in a real app, this would come from an API
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!currentUser?.uid) return;
+      setLoading(true);
+      try {
+        const students = await studentService.getStudents(currentUser.uid);
+        setTotalStudents(students.length);
+      } catch (error) {
+        setTotalStudents(0);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStudents();
+  }, [currentUser?.uid]);
+
   const statsData = [
     {
       title: 'Total Students',
-      value: '32',
+      value: loading ? '...' : totalStudents.toString(),
       icon: 'fas fa-user-graduate',
       iconColor: 'text-[#3498DB]',
       bgColor: 'bg-blue-100',
-      change: '2 new students this month',
-      changeType: 'positive' as const
+      change: loading ? '' : `${totalStudents === 1 ? '1 student' : `${totalStudents} students`} in your class list`,
+      changeType: 'students' as const
     },
     {
       title: 'Reading Sessions',
