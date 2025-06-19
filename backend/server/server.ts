@@ -32,14 +32,17 @@ const upload = multer({
 });
 
 // Middleware
-app.use(cors({
-  origin: isProduction
-    ? process.env.FRONTEND_URL
-    : 'http://localhost:5000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    const allowedOrigins = require('./config/cors.json').origin;
+    if (origin && allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // // Serve static files from the frontend's dist directory
@@ -73,6 +76,10 @@ app.use(express.json());
     });
 
     // Story Routes
+    app.get('/', (req: Request, res: Response) => {
+      res.send('Phil-E-Read backend is running.');
+    });
+
     app.get('/api/stories', async (req: Request, res: Response) => {
       try {
         const { readingLevel, categories, language, title } = req.query;
