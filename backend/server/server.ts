@@ -34,11 +34,8 @@ const upload = multer({
 // Middleware
 app.use(cors({
   origin: isProduction
-    ? process.env.FRONTEND_URL
-    : 'http://localhost:5000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+    ? 'https://phil-e-read-7p2c.onrender.com'
+    : '*',
 }));
 app.use(express.json());
 
