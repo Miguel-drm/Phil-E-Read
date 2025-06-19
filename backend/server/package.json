@@ -1,0 +1,32 @@
+{
+  "name": "backend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && node dist/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "firebase": "^11.9.0",
+    "mongodb": "^5.9.2",
+    "mongoose": "^7.8.7",
+    "multer": "^2.0.1",
+    "multer-gridfs-storage": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^1.4.13",
+    "@types/multer-gridfs-storage": "^4.0.8",
+    "@types/node": "^24.0.3",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "~5.8.3"
+  }
+} 
