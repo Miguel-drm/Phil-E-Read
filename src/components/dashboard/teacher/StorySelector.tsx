@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { Story } from '../../../services/storyService';
-import { getStories } from '../../../services/storyService';
+import type { Story } from '../../../types/Story';
+import { unifiedStoryService } from '../../../services/UnifiedStoryService';
 import Swal from 'sweetalert2';
 
 interface StorySelectorProps {
@@ -24,7 +24,7 @@ const StorySelector: React.FC<StorySelectorProps> = ({ onStorySelect, selectedSt
   const loadStories = async () => {
     try {
       setLoading(true);
-      const storiesData = await getStories(filters);
+      const storiesData = await unifiedStoryService.getStories(filters);
       setStories(storiesData);
     } catch (error) {
       console.error('Error loading stories:', error);
@@ -80,9 +80,9 @@ const StorySelector: React.FC<StorySelectorProps> = ({ onStorySelect, selectedSt
           ) : (
             stories.map((story) => (
               <div
-                key={story.id}
+                key={story._id}
                 className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                  selectedStoryId === story.id
+                  selectedStoryId === story._id
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-blue-300'
                 }`}
@@ -92,10 +92,10 @@ const StorySelector: React.FC<StorySelectorProps> = ({ onStorySelect, selectedSt
                   <div>
                     <h3 className="text-lg font-medium text-gray-800">{story.title}</h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      Level: {story.level} | Category: {story.category} | Language: {story.language}
+                      Level: {story.readingLevel} | Category: {story.categories?.join(', ')} | Language: {story.language}
                     </p>
                   </div>
-                  {selectedStoryId === story.id && (
+                  {selectedStoryId === story._id && (
                     <span className="text-blue-600">✓ Selected</span>
                   )}
                 </div>
