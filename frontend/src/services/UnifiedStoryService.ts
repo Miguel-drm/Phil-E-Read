@@ -10,7 +10,16 @@ interface FileBuffer {
 
 export class UnifiedStoryService {
   private static instance: UnifiedStoryService;
-  private readonly API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  // private readonly API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  private static getApiBaseUrl(): string {
+    // Use localhost for local dev, otherwise use production URL
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5000/api';
+    }
+    return 'https://phil-e-read-1.onrender.com/api';
+  }
+
+  private readonly API_BASE_URL = UnifiedStoryService.getApiBaseUrl();
   private readonly STORIES_URL = `${this.API_BASE_URL}/stories`;
 
   private constructor() {}
