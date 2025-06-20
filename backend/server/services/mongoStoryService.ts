@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Story from '../models/Story.js';
 import type { IStory } from '../models/Story.js';
 import { GridFSService } from './gridfsService.js';
+import pdfParse from 'pdf-parse';
 
 interface StoryInput {
   title: string;
@@ -24,14 +25,22 @@ export const mongoStoryService = {
         ...(storyData.grade && { grade: storyData.grade })
       });
 
-      // Create the story with the GridFS file ID
+      // Extract text from PDF
+      let extractedText = '';
+      try {
+        const parsed = await pdfParse(file);
+        extractedText = parsed.text || '';
+      } catch (err) {
+        console.warn('Failed to extract text from PDF:', err);
+      }
+
+      // Create the story with the GridFS file ID and extracted text
       const story = new Story({
         ...storyData,
-        textContent: storyData.textContent || '',
+        textContent: extractedText,
         pdfFileId: pdfFileId,
         isActive: true
       });
-      
       await story.save();
       return story;
     } catch (error) {
@@ -154,7 +163,7 @@ export const mongoStoryService = {
         return null;
       }
 
-      // If there's new PDF data, update it in GridFS
+      // If there's new PDF data, update it in GridFS and extract text
       if (updateData.pdfData) {
         // Delete old PDF if it exists
         if (story.pdfFileId) {
@@ -176,8 +185,17 @@ export const mongoStoryService = {
           }
         );
 
+        // Extract text from new PDF
+        let extractedText = '';
+        try {
+          const parsed = await pdfParse(updateData.pdfData);
+          extractedText = parsed.text || '';
+        } catch (err) {
+          console.warn('Failed to extract text from PDF:', err);
+        }
+
         story.pdfFileId = newPdfFileId;
-        
+        story.textContent = extractedText;
         // Remove pdfData from updateData as we've handled it
         delete updateData.pdfData;
       }

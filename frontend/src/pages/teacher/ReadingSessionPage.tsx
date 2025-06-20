@@ -217,6 +217,24 @@ const ReadingSessionPage: React.FC = () => {
     }
 
     if (pdfError || error) {
+      // If we have extracted text, show it as a fallback with a note
+      if (storyText && storyText.trim().length > 0) {
+        return (
+          <div className="story-container">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <div className="prose max-w-none">
+                <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
+                  {storyText}
+                </div>
+                <div className="mt-4 text-xs text-gray-500 italic">
+                  (PDF could not be loaded. Displaying extracted text instead.)
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      // Otherwise, show the error as before
       return (
         <div className="text-center p-8">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -240,6 +258,7 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
+    // Best practice: show PDF content if available, otherwise fallback to textContent
     return (
       <div className="story-container">
         <div className="bg-white p-6 rounded-lg shadow">
@@ -247,6 +266,11 @@ const ReadingSessionPage: React.FC = () => {
             <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
               {pdfContent || storyText}
             </div>
+            {!pdfContent && storyText && (
+              <div className="mt-4 text-xs text-gray-500 italic">
+                (PDF could not be loaded. Displaying extracted text instead.)
+              </div>
+            )}
           </div>
         </div>
       </div>
