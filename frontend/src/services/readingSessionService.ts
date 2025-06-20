@@ -25,6 +25,7 @@ export type ReadingSession = {
   createdAt?: Date;
   completedAt?: Date;  currentWordIndex?: number;
   storyUrl: string;
+  storyId?: string;
 };
 
 export const readingSessionService = {

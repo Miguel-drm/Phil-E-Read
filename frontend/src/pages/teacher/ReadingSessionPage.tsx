@@ -132,16 +132,14 @@ const ReadingSessionPage: React.FC = () => {
         console.log('All stories:', stories);
 
         // Extract story title from the URL and find matching story
-        const storyTitle = sessionData.storyUrl
-          .split('/')
-          .pop()
+        const storyTitle = sessionData.storyId
           ?.replace(/\.pdf$/, '')
           ?.replace(/-/g, ' ');
 
         console.log('Looking for story with title:', storyTitle);
 
         const story = stories.find((s: Story) => 
-          s.title.toLowerCase() === storyTitle?.toLowerCase()
+          s._id === sessionData.storyId
         );
 
         if (!story || !story._id) {

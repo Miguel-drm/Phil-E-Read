@@ -160,16 +160,20 @@ app.use(express.json());
           return;
         }
 
-        console.log('Attempting to get PDF content...');
-        const pdfBuffer = await mongoStoryService.getPDFContent(req.params.id);
-        
-        console.log('PDF content retrieved successfully, size:', pdfBuffer.length);
-        console.log('PDF content starts with:', pdfBuffer.slice(0, 50).toString());  // Log start of PDF content
-        
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Length', pdfBuffer.length);
-        res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
-        res.send(pdfBuffer);
+        if (story.pdfFileId) {
+          // fetch from GridFS
+        } else if (story.pdfData) {
+          // serve the PDF from pdfData
+          const buffer = Buffer.isBuffer(story.pdfData)
+            ? story.pdfData
+            : Buffer.from(story.pdfData, 'base64');
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', 'inline; filename=\"story.pdf\"');
+          res.send(buffer);
+          return;
+        } else {
+          res.status(404).json({ error: 'No PDF found for this story' });
+        }
       } catch (error) {
         console.error('Detailed error serving PDF:', error);
         if (error instanceof Error) {
