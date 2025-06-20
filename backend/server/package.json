@@ -16,7 +16,8 @@
     "mongodb": "^5.9.2",
     "mongoose": "^7.8.7",
     "multer": "^2.0.1",
-    "multer-gridfs-storage": "^5.0.2"
+    "multer-gridfs-storage": "^5.0.2",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -29,4 +30,4 @@
     "tsx": "^4.20.3",
     "typescript": "~5.8.3"
   }
-} 
+}
