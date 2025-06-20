@@ -2,7 +2,6 @@ import mongoose from 'mongoose';
 import Story from '../models/Story.js';
 import type { IStory } from '../models/Story.js';
 import { GridFSService } from './gridfsService.js';
-// @ts-ignore
 import pdfParse from 'pdf-parse';
 
 interface StoryInput {
