@@ -131,8 +131,8 @@ const ReadingSessionPage: React.FC = () => {
         const stories = await UnifiedStoryService.getInstance().getStories({});
         console.log('All stories:', stories);
 
-        // Extract story title from the URL and find matching story
-        const story = stories.find((s: Story) => s._id === sessionData.book);
+        // Extract story by _id or title for compatibility
+        const story = stories.find((s: Story) => s._id === sessionData.book || s.title === sessionData.book);
 
         if (!story || !story._id) {
           throw new Error('Story not found');
