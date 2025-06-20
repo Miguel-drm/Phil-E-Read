@@ -37,6 +37,8 @@ const ClassList: React.FC = () => {
   const [isCreatingGrade, setIsCreatingGrade] = useState(false);
   const [isAddingStudentToGrade, setIsAddingStudentToGrade] = useState(false);
   const [isDeletingSelectedGrades, setIsDeletingSelectedGrades] = useState(false);
+  const [classStudents, setClassStudents] = useState<Student[]>([]);
+  const [isLoadingStudentsInGrade, setIsLoadingStudentsInGrade] = useState(false);
   const [gradeStudentIds, setGradeStudentIds] = useState<string[]>([]);
   const gradeSubscriptionRef = useRef<(() => void) | undefined>(undefined);
 
@@ -599,46 +601,45 @@ const ClassList: React.FC = () => {
   };
 
   // Handle grade selection
-  const handleGradeSelect = async (gradeId: string) => {
-    if (selectedGrade === gradeId) {
-      return; // Do nothing if the same class is clicked
+  const handleGradeSelect = (gradeId: string) => {
+    if (selectedGrade !== gradeId) {
+      setSelectedGrade(gradeId);
     }
-    setSelectedGrade(gradeId);
+  };
 
-    // Clear grade students when selecting "all"
-    if (gradeId === 'all') {
+  // Optimized Effect: Subscribes to the list of student IDs for the selected grade.
+  // This is efficient because it only re-subscribes when the user picks a new grade.
+  useEffect(() => {
+    if (!selectedGrade || selectedGrade === 'all') {
       setGradeStudentIds([]);
+      // Clean up any existing subscription
       if (gradeSubscriptionRef.current) {
         gradeSubscriptionRef.current();
         gradeSubscriptionRef.current = undefined;
       }
       return;
     }
+  
+    setIsLoadingStudentsInGrade(true);
+    // Subscribe to the grade's student list in real-time
+    const unsubscribe = subscribeToStudentsInGrade(selectedGrade, (studentsInGrade) => {
+      const studentIds = studentsInGrade.map(s => s.studentId);
+      setGradeStudentIds(studentIds);
+      setIsLoadingStudentsInGrade(false);
+    });
+  
+    // Store the unsubscribe function to be called on cleanup
+    gradeSubscriptionRef.current = unsubscribe;
+  
+    return () => {
+      unsubscribe();
+      gradeSubscriptionRef.current = undefined;
+    };
+  }, [selectedGrade]);
 
-    try {
-      // Unsubscribe from previous grade subscription if exists
-      if (gradeSubscriptionRef.current) {
-        gradeSubscriptionRef.current();
-      }
-
-      // Subscribe to real-time updates for students in the selected grade
-      gradeSubscriptionRef.current = subscribeToStudentsInGrade(gradeId, (studentsInGrade) => {
-        console.log('Received real-time update for grade students:', studentsInGrade);
-        const studentIds = studentsInGrade.map(s => s.studentId);
-        setGradeStudentIds(studentIds);
-      });
-
-      // Initial load of students in grade
-      const initialStudents = await gradeService.getStudentsInGrade(gradeId);
-      const initialStudentIds = initialStudents.map(s => s.studentId);
-      setGradeStudentIds(initialStudentIds);
-    } catch (error) {
-      console.error('Error loading students for grade:', error);
-      showError('Error', 'Failed to load students for this grade');
-    }
-  };
-
-  // Calculate displayed students based on selected grade and filters
+  // Optimized Calculation: `displayedStudents` is memoized.
+  // It performs a fast, in-memory filter of the main `students` list using the `gradeStudentIds`.
+  // It only recalculates when its dependencies change, preventing unnecessary work.
   const displayedStudents = useMemo(() => {
     // Helper to get surname initial (or first name if only one part)
     const getSurnameInitial = (fullName: string) => {
@@ -649,16 +650,16 @@ const ClassList: React.FC = () => {
       return parts[0][0].toUpperCase(); // Only one name
     };
 
-    // First, filter by selected grade
-    let filtered = students;
-    if (selectedGrade && selectedGrade !== 'all') {
-      filtered = students.filter(student => student.id && gradeStudentIds.includes(student.id));
-    }
+    const sourceStudents = selectedGrade === 'all'
+      ? students
+      : students.filter(student => student.id && gradeStudentIds.includes(student.id));
+
+    let filtered = sourceStudents;
 
     // Then apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(student => {
+      filtered = sourceStudents.filter(student => {
         const matchesName = student.name.toLowerCase().includes(query);
         const matchesGrade = String(student.grade).toLowerCase().includes(query);
         const matchesPerformance = student.performance?.toLowerCase().includes(query) || false;
@@ -977,24 +978,13 @@ const ClassList: React.FC = () => {
     loadGrades();
   }, []);
 
-  // Always select the first class if none is selected and grades are loaded
+  // When grades first load, select the first one by default.
+  // This is a safe operation that only sets the selected ID.
   useEffect(() => {
-    if (grades.length > 0 && (!selectedGrade || selectedGrade === 'all')) {
-      const firstGradeId = grades[0].id || '';
-      setSelectedGrade(firstGradeId);
-      // Load students for the first class
-      (async () => {
-        try {
-          const studentsInGrade = await gradeService.getStudentsInGrade(firstGradeId);
-          const studentIds = studentsInGrade.map(s => s.studentId);
-          const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
-          setStudents(gradeStudents);
-        } catch (error) {
-          setStudents([]);
-        }
-      })();
+    if (grades.length > 0 && selectedGrade === 'all') {
+      setSelectedGrade(grades[0].id || 'all');
     }
-  }, [grades, students]);
+  }, [grades]);
 
   const handleGradeDotClick = (e: React.MouseEvent, gradeId: string) => {
     e.stopPropagation();
@@ -1197,26 +1187,33 @@ const ClassList: React.FC = () => {
         );
         let studentId: string;
         if (!existingStudent) {
-          const newStudent = {
+          // Ensure currentUser is available before proceeding
+          if (!currentUser?.uid) {
+            showError('Error', 'Authentication error. Please sign in again.');
+            setIsAddingStudentToGrade(false);
+            return;
+          }
+          
+          const newStudent: Omit<Student, 'id' | 'createdAt' | 'updatedAt'> = {
             name: formValues.name,
             grade: gradeName,
             readingLevel: formValues.readingLevel,
-            attendance: 0,
-            lastAssessment: new Date().toISOString().split('T')[0],
-            status: 'active' as const,
-            teacherId: currentUser?.uid || '',
-            parentId: formValues.parentId || undefined,
-            parentName: formValues.parentName || '',
-            performance: 'Good' as Student['performance'],
+            performance: 'Good', // Default performance
+            lastAssessment: new Date().toISOString().split('T')[0], // Default to today's date
+            status: 'active', // Default to active
+            teacherId: currentUser.uid, // Explicitly add the teacherId
+            parentId: formValues.parentId,
+            parentName: formValues.parentName,
           };
+          
           studentId = await studentService.addStudent(newStudent);
         } else {
           studentId = existingStudent.id!;
         }
         await gradeService.addStudentToGrade(gradeId, { studentId, name: formValues.name });
         showSuccess('Student Added', `${formValues.name} has been added to ${gradeName}.`);
-        await loadStudents();
-        await loadGrades();
+        
+        // Manual loading functions removed as requested to make way for a new implementation.
         await loadClassStatistics();
       }
     } catch (err) {
@@ -1228,34 +1225,6 @@ const ClassList: React.FC = () => {
       setIsAddingStudentToGrade(false);
     }
   };
-
-  // Subscribe to students in the selected grade in real time
-  useEffect(() => {
-    if (!selectedGrade || selectedGrade === 'all') {
-      setGradeStudentIds([]);
-      if (gradeSubscriptionRef.current) {
-        gradeSubscriptionRef.current();
-        gradeSubscriptionRef.current = undefined;
-      }
-      return;
-    }
-    // Unsubscribe from previous
-    if (gradeSubscriptionRef.current) {
-      gradeSubscriptionRef.current();
-      gradeSubscriptionRef.current = undefined;
-    }
-    // Subscribe to students in the selected grade
-    gradeSubscriptionRef.current = subscribeToStudentsInGrade(selectedGrade, (studentsInGrade) => {
-      setGradeStudentIds(studentsInGrade.map((s: any) => s.studentId));
-    });
-    // Cleanup
-    return () => {
-      if (gradeSubscriptionRef.current) {
-        gradeSubscriptionRef.current();
-        gradeSubscriptionRef.current = undefined;
-      }
-    };
-  }, [selectedGrade]);
 
   if (isLoading) {
     return (
@@ -1524,147 +1493,160 @@ const ClassList: React.FC = () => {
               </div>
               {/* Students List */}
               <div className="flex-1 overflow-auto">
-                {displayedStudents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full bg-gray-50">
-                    <div className="text-center p-8">
-                      <i className="fas fa-search text-4xl text-gray-400 mb-4"></i>
-                      <p className="text-sm text-gray-500">
-                        {searchQuery ? `No results for "${searchQuery}"` : 'No students found'}
-                      </p>
+                {isLoadingStudentsInGrade ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading class students...</p>
+                    </div>
+                  </div>
+                ) : displayedStudents.length > 0 ? (
+                  <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50 sticky top-0 z-10">
+                          <tr>
+                            <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                            <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+                            <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parent</th>
+                            <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
+                            <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {displayedStudents.map((student) => (
+                            <tr key={student.id} className="hover:bg-blue-50 transition-colors">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-8 w-8">
+                                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <span className="text-blue-600 font-medium text-sm">
+                                        {(() => {
+                                          const studentFullName = student.name || '';
+                                          let initial = '';
+
+                                          if (studentFullName.includes(' | ')) {
+                                              // New format: "Surname | Firstname"
+                                              const parts = studentFullName.split(' | ');
+                                              if (parts[0]) { // Surname part exists
+                                                  initial = parts[0][0];
+                                              }
+                                          } else {
+                                              // Old format: could be "Firstname Surname" or just "Name"
+                                              const parts = studentFullName.trim().split(' ');
+                                              if (parts.length > 0) {
+                                                  // Get the initial from the last part (assuming it's surname)
+                                                  initial = parts[parts.length - 1][0];
+                                              }
+                                          }
+                                          return initial.toUpperCase();
+                                        })()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {(() => {
+                                        const studentFullName = student.name || '';
+                                        let surname = '';
+                                        let firstName = '';
+
+                                        if (studentFullName.includes(' | ')) {
+                                            // New format: "Surname | Firstname"
+                                            const parts = studentFullName.split(' | ');
+                                            surname = parts[0] || '';
+                                            firstName = parts[1] || '';
+                                        } else {
+                                            // Old format: "Firstname Surname" or just "Name"
+                                            const parts = studentFullName.trim().split(' ');
+                                            if (parts.length > 1) {
+                                                surname = parts[parts.length - 1]; // Last part is surname
+                                                firstName = parts.slice(0, -1).join(' '); // Rest is first name
+                                            } else {
+                                                firstName = parts[0] || ''; // If only one part, treat as first name
+                                                surname = ''; // No clear surname
+                                            }
+                                        }
+                                        // Combine them as "Surname Firstname"
+                                        return `${surname} ${firstName}`.trim();
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{student.grade}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="flex items-center justify-center">
+                                  {student.parentId ? (
+                                    <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                      Linked
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => student.id && handleLinkParent(student.id)}
+                                      className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    >
+                                      <><i className="fas fa-link mr-1.5"></i>Link Parent</>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)}`}>
+                                  {student.performance}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex justify-end space-x-2">
+                                  <button
+                                    onClick={() => student.id && handleViewProfile(student.id)}
+                                    className="text-blue-600 hover:text-blue-900"
+                                    title="View Profile"
+                                    disabled={loadingStudentId === student.id || !canManage}
+                                  >
+                                    {loadingStudentId === student.id ? (
+                                      <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                    ) : (
+                                      <i className="fas fa-eye"></i>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => student.id && handleEditStudent(student.id)}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="Edit Student"
+                                    disabled={!canManage}
+                                  >
+                                      <i className="fas fa-edit"></i>
+                                  </button>
+                                  <button
+                                    onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete Student"
+                                    disabled={!canManage}
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ) : (
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr>
-                        <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                        <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
-                        <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parent</th>
-                        <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
-                        <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {displayedStudents.map((student) => (
-                        <tr key={student.id} className="hover:bg-blue-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-8 w-8">
-                                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <span className="text-blue-600 font-medium text-sm">
-                                    {(() => {
-                                      const studentFullName = student.name || '';
-                                      let initial = '';
-
-                                      if (studentFullName.includes(' | ')) {
-                                          // New format: "Surname | Firstname"
-                                          const parts = studentFullName.split(' | ');
-                                          if (parts[0]) { // Surname part exists
-                                              initial = parts[0][0];
-                                          }
-                                      } else {
-                                          // Old format: could be "Firstname Surname" or just "Name"
-                                          const parts = studentFullName.trim().split(' ');
-                                          if (parts.length > 0) {
-                                              // Get the initial from the last part (assuming it's surname)
-                                              initial = parts[parts.length - 1][0];
-                                          }
-                                      }
-                                      return initial.toUpperCase();
-                                    })()}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="ml-3">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {(() => {
-                                    const studentFullName = student.name || '';
-                                    let surname = '';
-                                    let firstName = '';
-
-                                    if (studentFullName.includes(' | ')) {
-                                        // New format: "Surname | Firstname"
-                                        const parts = studentFullName.split(' | ');
-                                        surname = parts[0] || '';
-                                        firstName = parts[1] || '';
-                                    } else {
-                                        // Old format: "Firstname Surname" or just "Name"
-                                        const parts = studentFullName.trim().split(' ');
-                                        if (parts.length > 1) {
-                                            surname = parts[parts.length - 1]; // Last part is surname
-                                            firstName = parts.slice(0, -1).join(' '); // Rest is first name
-                                        } else {
-                                            firstName = parts[0] || ''; // If only one part, treat as first name
-                                            surname = ''; // No clear surname
-                                        }
-                                    }
-                                    // Combine them as "Surname Firstname"
-                                    return `${surname} ${firstName}`.trim();
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{student.grade}</div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center">
-                              {student.parentId ? (
-                                <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                                  Linked
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => student.id && handleLinkParent(student.id)}
-                                  className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                  <><i className="fas fa-link mr-1.5"></i>Link Parent</>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)}`}>
-                              {student.performance}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                onClick={() => student.id && handleViewProfile(student.id)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="View Profile"
-                                disabled={loadingStudentId === student.id || !canManage}
-                              >
-                                {loadingStudentId === student.id ? (
-                                  <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                ) : (
-                                  <i className="fas fa-eye"></i>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => student.id && handleEditStudent(student.id)}
-                                className="text-indigo-600 hover:text-indigo-900"
-                                title="Edit Student"
-                                disabled={!canManage}
-                              >
-                                  <i className="fas fa-edit"></i>
-                              </button>
-                              <button
-                                onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
-                                className="text-red-600 hover:text-red-900"
-                                title="Delete Student"
-                                disabled={!canManage}
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="text-center py-12 px-4">
+                    <div className="mx-auto h-20 w-20 text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-full w-full" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      No students in this class. Please add students or select another class.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
