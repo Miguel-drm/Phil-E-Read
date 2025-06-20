@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Story from '../models/Story.js';
 import type { IStory } from '../models/Story.js';
 import { GridFSService } from './gridfsService.js';
+import pdfParse from 'pdf-parse';
 
 interface StoryInput {
   title: string;
@@ -24,10 +25,18 @@ export const mongoStoryService = {
         ...(storyData.grade && { grade: storyData.grade })
       });
 
+      let extractedText = '';
+      try {
+        const parsed = await pdfParse(file); // file is the PDF buffer
+        extractedText = parsed.text || '';
+      } catch (err) {
+        console.warn('Failed to extract text from PDF:', err);
+      }
+
       // Create the story with the GridFS file ID
       const story = new Story({
         ...storyData,
-        textContent: storyData.textContent || '',
+        textContent: extractedText,
         pdfFileId: pdfFileId,
         isActive: true
       });
