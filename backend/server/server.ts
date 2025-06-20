@@ -161,14 +161,25 @@ app.use(express.json());
         }
 
         if (story.pdfFileId) {
-          // fetch from GridFS
+          // fetch from GridFS and send
+          try {
+            const { buffer } = await mongoStoryService.getPDFContent(story._id.toString());
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
+            res.send(buffer);
+            return;
+          } catch (err) {
+            console.error('Error fetching PDF from GridFS:', err);
+            res.status(500).json({ error: 'Failed to fetch PDF from storage' });
+            return;
+          }
         } else if (story.pdfData) {
           // serve the PDF from pdfData
           const buffer = Buffer.isBuffer(story.pdfData)
             ? story.pdfData
             : Buffer.from(story.pdfData, 'base64');
           res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', 'inline; filename=\"story.pdf\"');
+          res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
           res.send(buffer);
           return;
         } else {
