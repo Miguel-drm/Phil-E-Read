@@ -32,21 +32,14 @@ service cloud.firestore {
         (isParent() && resource.data.studentId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.children)
       );
       allow create: if isAuthenticated() && (isTeacher() || isAdmin());
-      allow update: if isAuthenticated() && (
-        (isTeacher() && resource.data.teacherId == request.auth.uid) ||
-        isAdmin()
-      );
-      allow delete: if isAuthenticated() && (
-        (isTeacher() && resource.data.teacherId == request.auth.uid) ||
-        isAdmin()
-      );
+      allow update: if isAuthenticated() && (isTeacher() || isAdmin());
+      allow delete: if isAuthenticated() && (isTeacher() || isAdmin());
+
+      
       // Students subcollection in grades
       match /students/{studentId} {
         allow read: if isAuthenticated() && (isTeacher() || isAdmin());
-        allow write: if isAuthenticated() && (
-          (isTeacher() && get(/databases/$(database)/documents/classGrades/$(gradeId)).data.teacherId == request.auth.uid) ||
-          isAdmin()
-        );
+        allow write: if isAuthenticated() && (isTeacher() || isAdmin());
         allow delete: if isAuthenticated() && (
           (isTeacher() && get(/databases/$(database)/documents/classGrades/$(gradeId)).data.teacherId == request.auth.uid) ||
           isAdmin()

@@ -10,7 +10,8 @@ interface FileBuffer {
 
 export class UnifiedStoryService {
   private static instance: UnifiedStoryService;
-  private readonly API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/stories';
+  private readonly API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  private readonly STORIES_URL = `${this.API_BASE_URL}/stories`;
 
   private constructor() {}
 
@@ -75,7 +76,7 @@ export class UnifiedStoryService {
       }
 
       // Send the request
-      const response = await axios.post(this.API_URL, formData, {
+      const response = await axios.post(this.STORIES_URL, formData, {
         headers: { 
           'Content-Type': 'multipart/form-data'
         },
@@ -123,7 +124,7 @@ export class UnifiedStoryService {
         }
       }
 
-      const response = await axios.put(`${this.API_URL}/${id}`, formData, {
+      const response = await axios.put(`${this.STORIES_URL}/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       console.log('Story updated successfully:', response.data._id);
@@ -142,7 +143,7 @@ export class UnifiedStoryService {
         ...(filters.language && filters.language !== '' && { language: this.validateLanguage(filters.language) })
       };
 
-      const response = await axios.get(this.API_URL, { params: normalizedFilters });
+      const response = await axios.get(this.STORIES_URL, { params: normalizedFilters });
       console.log('Stories fetched successfully, count:', response.data.length);
       return response.data;
     } catch (error) {
@@ -153,7 +154,7 @@ export class UnifiedStoryService {
 
   public async getStoryById(id: string): Promise<Story> {
     try {
-      const response = await axios.get(`${this.API_URL}/${id}`);
+      const response = await axios.get(`${this.STORIES_URL}/${id}`);
       console.log('Story fetched successfully:', response.data._id);
       return response.data;
     } catch (error) {
@@ -164,7 +165,7 @@ export class UnifiedStoryService {
 
   public async deleteStory(id: string): Promise<void> {
     try {
-      await axios.delete(`${this.API_URL}/${id}`);
+      await axios.delete(`${this.STORIES_URL}/${id}`);
       console.log('Story deleted successfully:', id);
     } catch (error) {
       console.error('Error deleting story:', error);
@@ -174,7 +175,7 @@ export class UnifiedStoryService {
 
   public async searchStories(searchTerm: string): Promise<Story[]> {
     try {
-      const response = await axios.get(`${this.API_URL}/search`, {
+      const response = await axios.get(`${this.STORIES_URL}/search`, {
         params: { searchTerm }
       });
       console.log('Stories found:', response.data.length);
@@ -186,12 +187,12 @@ export class UnifiedStoryService {
   }
 
   public getStoryPdfUrl(id: string): string {
-    return `${this.API_URL}/${id}/pdf`;
+    return `${this.STORIES_URL}/${id}/pdf`;
   }
 
   public async downloadStoryPdf(id: string): Promise<Blob> {
     try {
-      const response = await axios.get(`${this.API_URL}/${id}/pdf`, {
+      const response = await axios.get(`${this.STORIES_URL}/${id}/pdf`, {
         responseType: 'blob'
       });
       console.log('PDF downloaded successfully');
@@ -204,7 +205,7 @@ export class UnifiedStoryService {
 
   public async getPDFContent(id: string): Promise<Buffer> {
     try {
-      const response = await axios.get(`${this.API_URL}/${id}/pdf`, {
+      const response = await axios.get(`${this.STORIES_URL}/${id}/pdf`, {
         responseType: 'arraybuffer'
       });
       return Buffer.from(response.data);
