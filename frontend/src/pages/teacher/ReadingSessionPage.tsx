@@ -191,7 +191,7 @@ const ReadingSessionPage: React.FC = () => {
     };
 
     fetchSession();
-  }, [sessionId, pdfContent]);
+  }, [sessionId]);
 
   const handleGoBack = () => {
     navigate(-1);
@@ -202,6 +202,21 @@ const ReadingSessionPage: React.FC = () => {
       return (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+        </div>
+      );
+    }
+
+    // Always show textContent if available
+    if (storyText && storyText.trim().length > 0) {
+      return (
+        <div className="story-container">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
+                {storyText}
+              </div>
+            </div>
+          </div>
         </div>
       );
     }

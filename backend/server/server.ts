@@ -179,7 +179,7 @@ app.use(express.json());
             ? story.pdfData
             : Buffer.from(story.pdfData, 'base64');
           res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
+          res.setHeader('Content-Disposition', 'inline; filename=\"story.pdf\"');
           res.send(buffer);
           return;
         } else {
