@@ -110,6 +110,22 @@ export const mongoStoryService = {
         try {
           const { buffer } = await GridFSService.downloadFile(story.pdfFileId.toString());
           console.log('Successfully downloaded PDF from GridFS, size:', buffer.length);
+          
+          // Debug: Check the downloaded buffer
+          console.log('Downloaded buffer details:');
+          console.log('- Buffer type:', typeof buffer);
+          console.log('- Is Buffer:', Buffer.isBuffer(buffer));
+          console.log('- First 20 bytes (hex):', buffer.slice(0, 20).toString('hex'));
+          console.log('- First 10 chars:', buffer.slice(0, 10).toString());
+          
+          // Verify it's a valid PDF
+          const header = buffer.slice(0, 4).toString();
+          console.log('PDF header from GridFS:', header);
+          if (!header.startsWith('%PDF')) {
+            console.error('Invalid PDF header from GridFS:', header);
+            throw new Error('Invalid PDF data from GridFS: Missing PDF header');
+          }
+          
           return buffer;
         } catch (downloadError) {
           console.error('Error downloading PDF from GridFS:', downloadError);

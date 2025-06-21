@@ -49,7 +49,18 @@ const ReadingSessionPage: React.FC = () => {
       console.log('Fetching PDF from URL:', pdfUrl);
       const response = await fetch(pdfUrl);
       if (!response.ok) {
-        throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+        // Try to get error details from response
+        let errorMessage = `Failed to fetch PDF: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = `PDF Error: ${errorData.error}`;
+          }
+        } catch (parseError) {
+          // If we can't parse JSON, use the status text
+          console.warn('Could not parse error response:', parseError);
+        }
+        throw new Error(errorMessage);
       }
       
       // Get the PDF as an array buffer
@@ -101,6 +112,7 @@ const ReadingSessionPage: React.FC = () => {
     } catch (error) {
       console.error('Error loading PDF:', error);
       setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
+      throw error; // Re-throw the error so the outer catch can handle it
     } finally {
       setIsLoadingPdf(false);
     }
@@ -148,25 +160,32 @@ const ReadingSessionPage: React.FC = () => {
             throw new Error('Failed to fetch story details');
           }
 
-          // Try to load PDF content using the API endpoint
+          console.log('Full story details:', {
+            id: fullStory._id,
+            title: fullStory.title,
+            hasTextContent: !!fullStory.textContent,
+            textContentLength: fullStory.textContent?.length,
+            textContentPreview: fullStory.textContent?.substring(0, 100)
+          });
+
+          // Set text content first (this is what we want to display)
+          if (fullStory.textContent && fullStory.textContent.trim().length > 0) {
+            setStoryText(fullStory.textContent.trim());
+            const wordArray = fullStory.textContent.trim().split(/\s+/).filter((word: string) => word.length > 0);
+            setWords(wordArray);
+            console.log('Text content loaded. Found', wordArray.length, 'words');
+          }
+
+          // Try to load PDF content as a backup (but don't fail if it doesn't work)
           try {
             const pdfUrl = UnifiedStoryService.getInstance().getStoryPdfUrl(story._id);
             await loadPdfContent(pdfUrl);
-            // If PDF loading succeeds, split the content into words
-            const wordArray = pdfContent.split(/\s+/).filter((word: string) => word.length > 0);
-            setWords(wordArray);
-            console.log('PDF processing completed. Found', wordArray.length, 'words');
+            console.log('PDF content also loaded successfully');
           } catch (pdfError) {
-            console.error('Error loading PDF:', pdfError);
-            // If PDF loading fails, fall back to textContent if available
-            if (fullStory.textContent && fullStory.textContent.trim().length > 0) {
-              setStoryText(fullStory.textContent.trim());
-              const wordArray = fullStory.textContent.trim().split(/\s+/).filter((word: string) => word.length > 0);
-              setWords(wordArray);
-              console.log('Text processing completed. Found', wordArray.length, 'words');
-            } else {
-              throw new Error('Failed to load story content: Both PDF and text content are unavailable');
-            }
+            console.warn('PDF loading failed, but text content is available:', pdfError);
+            // Don't throw error here since we have text content
+            // Set a flag to indicate PDF failed
+            setPdfError(pdfError instanceof Error ? pdfError.message : 'PDF loading failed');
           }
 
         } catch (error) {
@@ -206,7 +225,7 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    // Always show textContent if available
+    // Show text content if available (this is the primary content we want to display)
     if (storyText && storyText.trim().length > 0) {
       return (
         <div className="story-container">
@@ -221,25 +240,23 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (pdfError || error) {
-      // If we have extracted text, show it as a fallback with a note
-      if (storyText && storyText.trim().length > 0) {
-        return (
-          <div className="story-container">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-                  {storyText}
-                </div>
-                <div className="mt-4 text-xs text-gray-500 italic">
-                  (PDF could not be loaded. Displaying extracted text instead.)
-                </div>
+    // Show PDF content if available and no text content
+    if (pdfContent && pdfContent.trim().length > 0) {
+      return (
+        <div className="story-container">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
+                {pdfContent}
               </div>
             </div>
           </div>
-        );
-      }
-      // Otherwise, show the error as before
+        </div>
+      );
+    }
+
+    // Show error if no content is available
+    if (pdfError || error) {
       return (
         <div className="text-center p-8">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -254,30 +271,11 @@ const ReadingSessionPage: React.FC = () => {
       );
     }
 
-    if (!pdfContent && !storyText) {
-      return (
-        <div className="text-center text-gray-600 p-8">
-          <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p>No story content available</p>
-        </div>
-      );
-    }
-
-    // Best practice: show PDF content if available, otherwise fallback to textContent
+    // No content available
     return (
-      <div className="story-container">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="prose max-w-none">
-            <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-              {pdfContent || storyText}
-            </div>
-            {!pdfContent && storyText && (
-              <div className="mt-4 text-xs text-gray-500 italic">
-                (PDF could not be loaded. Displaying extracted text instead.)
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="text-center text-gray-600 p-8">
+        <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p>No story content available</p>
       </div>
     );
   };

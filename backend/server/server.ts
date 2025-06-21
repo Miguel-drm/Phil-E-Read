@@ -133,6 +133,61 @@ app.use(express.json());
       }
     });
 
+    app.get('/api/test-pdf/:id', async (req: Request, res: Response) => {
+      try {
+        console.log('Test PDF endpoint called for story ID:', req.params.id);
+        
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+          res.status(400).json({ error: 'Invalid story ID format' });
+          return;
+        }
+
+        const story = await Story.findById(req.params.id).lean();
+        if (!story) {
+          res.status(404).json({ error: 'Story not found' });
+          return;
+        }
+
+        console.log('Story found for test:', {
+          id: story._id,
+          title: story.title,
+          hasPdfFileId: !!story.pdfFileId,
+          hasPdfData: !!story.pdfData
+        });
+
+        if (story.pdfFileId) {
+          try {
+            const { buffer } = await mongoStoryService.getPDFContent(story._id.toString());
+            
+            // Ensure we have a proper Node.js Buffer
+            const pdfBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+            
+            // Return debug info instead of the PDF
+            res.json({
+              success: true,
+              bufferSize: pdfBuffer.length,
+              bufferType: typeof pdfBuffer,
+              isBuffer: Buffer.isBuffer(pdfBuffer),
+              first20BytesHex: pdfBuffer.slice(0, 20).toString('hex'),
+              first10Chars: pdfBuffer.slice(0, 10).toString(),
+              pdfHeader: pdfBuffer.slice(0, 4).toString(),
+              hasValidHeader: pdfBuffer.slice(0, 4).toString().startsWith('%PDF')
+            });
+          } catch (err) {
+            res.status(500).json({ 
+              error: 'Failed to get PDF content',
+              details: err instanceof Error ? err.message : 'Unknown error'
+            });
+          }
+        } else {
+          res.status(404).json({ error: 'No PDF file ID found' });
+        }
+      } catch (error) {
+        console.error('Test PDF endpoint error:', error);
+        res.status(500).json({ error: 'Test failed' });
+      }
+    });
+
     app.get('/api/stories/:id/pdf', async (req: Request, res: Response) => {
       try {
         console.log('PDF endpoint called for story ID:', req.params.id);
@@ -164,9 +219,30 @@ app.use(express.json());
           // fetch from GridFS and send
           try {
             const { buffer } = await mongoStoryService.getPDFContent(story._id.toString());
+            
+            // Ensure we have a proper Node.js Buffer
+            const pdfBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+            
+            // Debug: Check what we're about to send
+            console.log('About to send PDF buffer:');
+            console.log('- Buffer size:', pdfBuffer.length);
+            console.log('- Buffer type:', typeof pdfBuffer);
+            console.log('- Is Buffer:', Buffer.isBuffer(pdfBuffer));
+            console.log('- First 20 bytes (hex):', pdfBuffer.slice(0, 20).toString('hex'));
+            console.log('- First 10 chars:', pdfBuffer.slice(0, 10).toString());
+            
+            // Verify it's a valid PDF before sending
+            const header = pdfBuffer.slice(0, 4).toString();
+            if (!header.startsWith('%PDF')) {
+              console.error('Invalid PDF header before sending:', header);
+              res.status(500).json({ error: 'Invalid PDF data: Missing PDF header' });
+              return;
+            }
+            
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', 'inline; filename="story.pdf"');
-            res.send(buffer);
+            res.setHeader('Content-Length', pdfBuffer.length.toString());
+            res.send(pdfBuffer);
             return;
           } catch (err) {
             console.error('Error fetching PDF from GridFS:', err);
