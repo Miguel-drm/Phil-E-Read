@@ -227,12 +227,63 @@ const ReadingSessionPage: React.FC = () => {
 
     // Show text content if available (this is the primary content we want to display)
     if (storyText && storyText.trim().length > 0) {
+      // Split text into paragraphs and process each word
+      const paragraphs = storyText.split('\n\n').filter(p => p.trim().length > 0);
+      
       return (
-        <div className="story-container">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="prose max-w-none">
-              <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-                {storyText}
+        <div className="story-container bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">Story Content</h3>
+              <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <span className="flex items-center">
+                  <BookOpenIcon className="h-4 w-4 mr-1" />
+                  {words.length} words
+                </span>
+                <span>•</span>
+                <span>{paragraphs.length} paragraphs</span>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="max-h-96 overflow-y-auto pr-4 custom-scrollbar">
+                <div className="prose prose-lg max-w-none">
+                  <div className="space-y-6">
+                    {paragraphs.map((paragraph, paragraphIndex) => {
+                      const wordsInParagraph = paragraph.trim().split(/\s+/);
+                      return (
+                        <div key={paragraphIndex} className="mb-6 last:mb-0">
+                          <p className="text-gray-800 leading-relaxed flex flex-wrap gap-y-2">
+                            {wordsInParagraph.map((word, wordIndex) => {
+                              // Calculate the global word index for highlighting
+                              const globalWordIndex = paragraphs
+                                .slice(0, paragraphIndex)
+                                .reduce((acc, p) => acc + p.trim().split(/\s+/).length, 0) + wordIndex;
+                              const isCurrentWord = currentWordIndex === globalWordIndex;
+                              return (
+                                <span
+                                  key={`${paragraphIndex}-${wordIndex}`}
+                                  className={
+                                    `inline-block mr-2 mb-1 px-2 py-1 rounded font-serif text-base transition-all duration-150 ` +
+                                    (isCurrentWord
+                                      ? 'bg-blue-600 text-white font-bold shadow-md scale-105'
+                                      : 'bg-gray-100 text-gray-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
+                                  }
+                                >
+                                  {word}
+                                </span>
+                              );
+                            })}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              {/* Scroll indicator */}
+              <div className="absolute right-2 top-0 bottom-0 w-1 bg-gray-200 rounded-full">
+                <div className="w-1 bg-blue-500 rounded-full transition-all duration-300" 
+                     style={{ height: '20%' }}></div>
               </div>
             </div>
           </div>
@@ -242,12 +293,51 @@ const ReadingSessionPage: React.FC = () => {
 
     // Show PDF content if available and no text content
     if (pdfContent && pdfContent.trim().length > 0) {
+      const paragraphs = pdfContent.split('\n\n').filter(p => p.trim().length > 0);
+      
       return (
-        <div className="story-container">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="prose max-w-none">
-              <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed">
-                {pdfContent}
+        <div className="story-container bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">Story Content</h3>
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <span>{words.length} words</span>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="max-h-96 overflow-y-auto pr-4 custom-scrollbar">
+                <div className="prose prose-lg max-w-none">
+                  <div className="space-y-6">
+                    {paragraphs.map((paragraph, paragraphIndex) => {
+                      const wordsInParagraph = paragraph.trim().split(/\s+/);
+                      return (
+                        <div key={paragraphIndex} className="mb-6 last:mb-0">
+                          <p className="text-gray-800 leading-relaxed flex flex-wrap gap-y-2">
+                            {wordsInParagraph.map((word, wordIndex) => {
+                              const globalWordIndex = paragraphs
+                                .slice(0, paragraphIndex)
+                                .reduce((acc, p) => acc + p.trim().split(/\s+/).length, 0) + wordIndex;
+                              const isCurrentWord = currentWordIndex === globalWordIndex;
+                              return (
+                                <span
+                                  key={`${paragraphIndex}-${wordIndex}`}
+                                  className={
+                                    `inline-block mr-2 mb-1 px-2 py-1 rounded font-serif text-base transition-all duration-150 ` +
+                                    (isCurrentWord
+                                      ? 'bg-blue-600 text-white font-bold shadow-md scale-105'
+                                      : 'bg-gray-100 text-gray-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
+                                  }
+                                >
+                                  {word}
+                                </span>
+                              );
+                            })}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -258,7 +348,7 @@ const ReadingSessionPage: React.FC = () => {
     // Show error if no content is available
     if (pdfError || error) {
       return (
-        <div className="text-center p-8">
+        <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-gray-200">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <div className="text-red-600 mb-4">{pdfError || error}</div>
           <button
@@ -273,9 +363,9 @@ const ReadingSessionPage: React.FC = () => {
 
     // No content available
     return (
-      <div className="text-center text-gray-600 p-8">
+      <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-gray-200">
         <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <p>No story content available</p>
+        <p className="text-gray-600">No story content available</p>
       </div>
     );
   };
@@ -375,24 +465,25 @@ const ReadingSessionPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm sticky top-0 z-10">
+      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="container-fluid px-4 sm:px-6 lg:px-8">
           <div className="py-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleGoBack}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
               >
-                <ArrowLeftIcon className="h-5 w-5 mr-2" />
-                Back to Sessions
+                <ArrowLeftIcon className="h-4 w-4 mr-2" />
+                Back
               </button>
               <div className="flex items-center space-x-2">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${currentSession.status === 'completed'
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  currentSession.status === 'completed'
                     ? 'bg-green-100 text-green-800'
                     : currentSession.status === 'in-progress'
                       ? 'bg-blue-100 text-blue-800'
                       : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                }`}>
                   {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
                 </span>
                 {currentSession.status === 'in-progress' && (
@@ -406,9 +497,8 @@ const ReadingSessionPage: React.FC = () => {
               {currentSession.status === 'in-progress' && (
                 <button
                   onClick={handleCompleteSession}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
                 >
-                  {/* <CheckCircleIcon className="h-5 w-5 mr-2" /> */}
                   Complete Session
                 </button>
               )}
@@ -417,26 +507,27 @@ const ReadingSessionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Session Info */}
+      {/* Main Content */}
       <div className="container-fluid px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        {/* Session Info Card */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="flex items-start space-x-3">
-              <BookOpenIcon className="h-6 w-6 text-blue-600 mt-1" />
+              <BookOpenIcon className="h-5 w-5 text-blue-600 mt-1" />
               <div>
-                <h2 className="text-lg font-medium text-gray-900">{currentSession.title}</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{currentSession.title}</h2>
                 <p className="text-sm text-gray-500 mt-1">{currentSession.book}</p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <UserGroupIcon className="h-6 w-6 text-blue-600 mt-1" />
+              <UserGroupIcon className="h-5 w-5 text-blue-600 mt-1" />
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Students</h3>
-                <div className="mt-1 flex flex-wrap gap-2">
+                <div className="mt-1 flex flex-wrap gap-1">
                   {currentSession.students.map((student: string, index: number) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                     >
                       {student}
                     </span>
@@ -445,7 +536,7 @@ const ReadingSessionPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <ClockIcon className="h-6 w-6 text-blue-600 mt-1" />
+              <ClockIcon className="h-5 w-5 text-blue-600 mt-1" />
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Started</h3>
                 <p className="text-sm text-gray-900 mt-1">
@@ -454,42 +545,37 @@ const ReadingSessionPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <ChartBarIcon className="h-6 w-6 text-blue-600 mt-1" />
+              <ChartBarIcon className="h-5 w-5 text-blue-600 mt-1" />
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Progress</h3>
                 <div className="mt-1">
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: '{((currentWordIndex / words.length) * 100).toFixed(0)}%' }}></div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${Math.min((currentWordIndex / words.length) * 100, 100)}%` }}
+                    ></div>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">{((currentWordIndex / words.length) * 100).toFixed(0)}% Complete</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {Math.round((currentWordIndex / words.length) * 100)}% Complete
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Story Text Panel */}
-          <div className="lg:col-span-3 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-            <div className="p-6">
-              <div className="max-w-full">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                  <BookOpenIcon className="h-6 w-6 text-blue-600 mr-2" />
-                  Story Content
-                </h3>
-                <div className="story-viewer-container">
-                  {renderStoryContent()}
-                </div>
-              </div>
-            </div>
+          {/* Story Content Panel */}
+          <div className="lg:col-span-3">
+            {renderStoryContent()}
           </div>
 
           {/* Progress Panel */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6">
               <div className="flex items-center space-x-2 mb-6">
-                <ChartBarIcon className="h-6 w-6 text-blue-600" />
+                <ChartBarIcon className="h-5 w-5 text-blue-600" />
                 <h3 className="text-lg font-medium text-gray-900">Reading Progress</h3>
               </div>
               <div className="space-y-4">
@@ -507,7 +593,7 @@ const ReadingSessionPage: React.FC = () => {
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Words Read</h4>
-                  <p className="text-2xl font-semibold text-gray-900">0</p>
+                  <p className="text-2xl font-semibold text-gray-900">{currentWordIndex}</p>
                 </div>
               </div>
             </div>
@@ -515,15 +601,15 @@ const ReadingSessionPage: React.FC = () => {
         </div>
 
         {/* Recording Controls */}
-        <div className="mt-6 bg-white rounded-lg shadow-sm p-6">
+        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex justify-center space-x-4">
             {!isRecording ? (
               <button
                 onClick={handleStartRecording}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
               >
-                <MicrophoneIcon className="h-6 w-6 mr-2" />
-                Start Recording
+                <MicrophoneIcon className="h-5 w-5 mr-2" />
+                Start Session
               </button>
             ) : (
               <>
@@ -532,7 +618,7 @@ const ReadingSessionPage: React.FC = () => {
                     onClick={handleResumeRecording}
                     className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
                   >
-                    <PlayIcon className="h-6 w-6 mr-2" />
+                    <PlayIcon className="h-5 w-5 mr-2" />
                     Resume Recording
                   </button>
                 ) : (
@@ -540,7 +626,7 @@ const ReadingSessionPage: React.FC = () => {
                     onClick={handlePauseRecording}
                     className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors duration-200"
                   >
-                    <PauseIcon className="h-6 w-6 mr-2" />
+                    <PauseIcon className="h-5 w-5 mr-2" />
                     Pause Recording
                   </button>
                 )}
@@ -548,7 +634,7 @@ const ReadingSessionPage: React.FC = () => {
                   onClick={handleStopRecording}
                   className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
                 >
-                  <StopIcon className="h-6 w-6 mr-2" />
+                  <StopIcon className="h-5 w-5 mr-2" />
                   Stop Recording
                 </button>
               </>

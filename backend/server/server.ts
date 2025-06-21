@@ -8,6 +8,7 @@ import { mongoStoryService } from './services/mongoStoryService.js';
 import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
+import GridFSService from './services/gridfsService.js';
 
 dotenv.config();
 
@@ -30,6 +31,8 @@ const upload = multer({
     }
   },
 });
+
+const audioUpload = multer({ storage: multer.memoryStorage() });
 
 // Middleware
 app.use(cors({
@@ -421,6 +424,52 @@ app.use(express.json());
       } catch (error) {
         console.error('Error searching stories:', error);
         res.status(500).json({ error: 'Failed to search stories' });
+        return;
+      }
+    });
+
+    // Upload audio for a session
+    app.post('/api/sessions/:id/audio', audioUpload.single('audio'), async (req, res) => {
+      try {
+        if (!req.file) {
+          res.status(400).json({ error: 'No audio file uploaded' });
+          return;
+        }
+        const sessionId = req.params.id;
+        // Save to GridFS
+        const audioFileId = await GridFSService.uploadFile(
+          req.file.buffer,
+          `session-${sessionId}-${Date.now()}.webm`, // or .wav/.mp3
+          { contentType: req.file.mimetype, sessionId }
+        );
+        // Optionally, save audioFileId to the session document if you have a Session model
+        // await Session.findByIdAndUpdate(sessionId, { audioFileId });
+        res.json({ success: true, audioFileId });
+        return;
+      } catch (error) {
+        console.error('Audio upload error:', error);
+        res.status(500).json({ error: 'Failed to upload audio' });
+        return;
+      }
+    });
+
+    // Retrieve audio for a session
+    app.get('/api/sessions/:id/audio', async (req, res) => {
+      try {
+        // For demo, get audioFileId from query param
+        const audioFileId = req.query.audioFileId as string;
+        if (!audioFileId) {
+          res.status(400).json({ error: 'audioFileId required' });
+          return;
+        }
+        const { buffer, metadata } = await GridFSService.downloadFile(audioFileId);
+        res.setHeader('Content-Type', metadata.contentType || 'audio/webm');
+        res.setHeader('Content-Disposition', 'inline');
+        res.send(buffer);
+        return;
+      } catch (error) {
+        console.error('Audio fetch error:', error);
+        res.status(500).json({ error: 'Failed to fetch audio' });
         return;
       }
     });
