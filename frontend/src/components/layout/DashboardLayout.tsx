@@ -17,22 +17,21 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   if (!currentUser) {
-    return null; // ProtectedRoute will handle redirection
+    return null; 
   }
 
-  // Enhanced responsive detection
   useEffect(() => {
     const checkScreenSize = () => {
       const width = window.innerWidth;
       setIsMobile(width < 768);
       setIsTablet(width >= 768 && width < 1024);
       
-      // Auto-close mobile sidebar on larger screens
+      
       if (width >= 1024) {
         setSidebarOpen(false);
       }
       
-      // Auto-collapse sidebar on tablet for better space usage
+
       if (width >= 768 && width < 1024) {
         setSidebarCollapsed(true);
       } else {
@@ -78,6 +77,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     return 'ml-64';
   };
 
+  // Handler for hamburger/menu button
+  const handleHeaderMenuClick = () => {
+    if (isMobile) {
+      toggleSidebar();
+    } else {
+      toggleSidebarCollapse();
+    }
+  };
+
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden flex flex-col md:flex-row">
       {/* Sidebar */}
@@ -95,10 +103,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         {/* Header */}
         <Header
           isMobile={isMobile}
-          isTablet={isTablet}
-          onMenuToggle={toggleSidebar}
-          onSidebarToggle={toggleSidebarCollapse}
-          sidebarCollapsed={sidebarCollapsed}
+          onMenuToggle={handleHeaderMenuClick}
+          isSidebarCollapsed={sidebarCollapsed}
         />
         {/* Content Container */}
         <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 w-full min-w-0 pt-[var(--header-height,56px)] md:pt-0">

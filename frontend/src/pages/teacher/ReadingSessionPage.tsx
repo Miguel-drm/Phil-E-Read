@@ -1,4 +1,4 @@
-import React, {useEffect, useState } from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { readingSessionService, type ReadingSession } from '@/services/readingSessionService';
 import { UnifiedStoryService } from '@/services/UnifiedStoryService';
@@ -28,18 +28,248 @@ const ReadingSessionPage: React.FC = () => {
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
+  // Audio recording state
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  // Audio and speech recognition refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const [transcript, setTranscript] = useState('');
+  const [wordsRead, setWordsRead] = useState(0);
+  const [readingSpeed, setReadingSpeed] = useState(0); // WPM
+  const [accuracy, setAccuracy] = useState(0); // %
+
+  // Add debug state
+  const [debugSpokenWords, setDebugSpokenWords] = useState<string[]>([]);
+  const [debugStoryWords, setDebugStoryWords] = useState<string[]>([]);
+  const [debugStoryText, setDebugStoryText] = useState('');
+
+  // Add miscues and comprehension state
+  const [miscues, setMiscues] = useState(0);
+  const [comprehensionAnswers, setComprehensionAnswers] = useState(0);
+  const totalComprehensionQuestions = 7; // You can make this dynamic if needed
+
+  // Real-time Oral Reading Score (Accuracy)
+  const oralReadingScore = words.length > 0 ? ((words.length - miscues) / words.length * 100).toFixed(1) : '0.0';
+
+  // Real-time Reading Speed (WPM)
+  const readingSpeedWPM = elapsedTime > 0 ? ((wordsRead / elapsedTime) * 60).toFixed(0) : '0';
+
+  // Real-time Comprehension
+  const comprehensionPercent = totalComprehensionQuestions > 0 ? ((comprehensionAnswers / totalComprehensionQuestions) * 100).toFixed(0) : '0';
+
+  // Helper: Normalize text for comparison (lowercase, remove all non-word characters)
+  const normalize = (text: string) => text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+
+  // Helper: Check if a word contains any alphanumeric character
+  const isWordAlphanumeric = (word: string) => /[a-zA-Z0-9]/.test(word);
+
+  // Helper: Extract all readable words (alphanumeric only) from text, skipping punctuation/symbols
+  function extractWordsFromText(text: string): string[] {
+    // This regex matches words with at least one alphanumeric character
+    return text.match(/\b\w+\b/g) || [];
+  }
+
+  // Helper: Simple Soundex implementation (for browser, no deps)
+  function soundex(s: string): string {
+    const a = s.toLowerCase().replace(/[^a-z]/g, '').split('');
+    if (!a.length) return '';
+    const f = a.shift()!;
+    const codes: { [key: string]: string } = {
+      a: '', e: '', i: '', o: '', u: '', y: '', h: '', w: '',
+      b: '1', f: '1', p: '1', v: '1',
+      c: '2', g: '2', j: '2', k: '2', q: '2', s: '2', x: '2', z: '2',
+      d: '3', t: '3',
+      l: '4',
+      m: '5', n: '5',
+      r: '6'
+    };
+    let r = f + a.map(c => codes[c] || '').join('');
+    r = r.replace(/(\d)\1+/g, '$1');
+    r = r.replace(/[^a-z\d]/g, '');
+    return (r + '000').slice(0, 4);
+  }
+
+  // Levenshtein distance implementation
+  function levenshtein(a: string, b: string): number {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const v0 = Array(b.length + 1).fill(0);
+    const v1 = Array(b.length + 1).fill(0);
+    for (let i = 0; i <= b.length; i++) v0[i] = i;
+    for (let i = 0; i < a.length; i++) {
+      v1[0] = i + 1;
+      for (let j = 0; j < b.length; j++) {
+        const cost = a[i] === b[j] ? 0 : 1;
+        v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+      }
+      for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
+    }
+    return v1[b.length];
+  }
+
+  /**
+   * Returns true if spokenWord and expectedWord are phonetically similar (Soundex) or have Levenshtein distance <= 1.
+   * For production, consider using 'natural' or 'double-metaphone' npm packages.
+   */
+  function isWordMatch(spokenWord: string, expectedWord: string): boolean {
+    const normSpoken = normalize(spokenWord);
+    const normExpected = normalize(expectedWord);
+    if (!normSpoken || !normExpected) return false;
+    // Phonetic match
+    if (soundex(normSpoken) === soundex(normExpected)) return true;
+    // Fuzzy match
+    if (levenshtein(normSpoken, normExpected) <= 1) return true;
+    return false;
+  }
+
+  // Helper: Split text into display words and normalized words, and mark if each is alphanumeric
+  const splitAndNormalizeWords = (text: string) => {
+    const displayWords = text.split(/\s+/).filter(Boolean);
+    const normalizedWords = displayWords.map(normalize);
+    const isAlphanumeric = displayWords.map(isWordAlphanumeric);
+    return { displayWords, normalizedWords, isAlphanumeric };
+  };
+
+  // Start recording and speech recognition
   const handleStartRecording = () => {
     setIsRecording(true);
     setIsPaused(false);
+    setTranscript('');
+    setWordsRead(0);
+    setReadingSpeed(0);
+    setAccuracy(0);
+    setElapsedTime(0);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setCurrentWordIndex(0);
+
+    // --- MediaRecorder ---
+    if (navigator.mediaDevices && window.MediaRecorder) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        const audioChunks: BlobPart[] = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          setAudioBlob(audioBlob);
+          setAudioUrl(URL.createObjectURL(audioBlob));
+        };
+        mediaRecorder.start();
+      }).catch(err => {
+        alert('Microphone access denied or not available.');
+        setIsRecording(false);
+      });
+    } else {
+      alert('MediaRecorder not supported in this browser.');
+      setIsRecording(false);
+    }
+
+    // --- SpeechRecognition ---
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      let runningTranscript = '';
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            runningTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        setTranscript(runningTranscript + interim);
+
+        if (storyText && isRecording) {
+          const storyWords = storyText.split(/\s+/).map(normalize);
+          const spokenWords = (runningTranscript + interim).split(/\s+/).map(normalize).filter(Boolean);
+          setDebugStoryWords(storyWords);
+          setDebugSpokenWords(spokenWords);
+          // Extra logs
+          console.log('Story words:', storyWords);
+          console.log('Spoken words:', spokenWords);
+          let matchIdx = 0;
+          for (let i = 0; i < spokenWords.length && matchIdx < storyWords.length; i++) {
+            if (spokenWords[i] === storyWords[matchIdx]) {
+              matchIdx++;
+            }
+            console.log(`Comparing: spoken='${spokenWords[i]}' story='${storyWords[matchIdx]}' => matchIdx=${matchIdx}`);
+          }
+          console.log('Highlight index:', matchIdx);
+          setCurrentWordIndex(matchIdx);
+          setWordsRead(matchIdx);
+          setAccuracy(storyWords.length > 0 ? Math.round((matchIdx / storyWords.length) * 100) : 0);
+          setReadingSpeed(elapsedTime > 0 ? Math.round((matchIdx / (elapsedTime / 60))) : 0);
+        }
+      };
+      recognition.onerror = (e: any) => {
+        if (e.error !== 'no-speech') {
+          alert('Speech recognition error: ' + e.error);
+        }
+      };
+      recognition.start();
+    } else {
+      alert('SpeechRecognition not supported in this browser.');
+    }
   };
 
+  // Stop recording and speech recognition
+  const handleStopRecording = async () => {
+    try {
+      setIsRecording(false);
+      setIsPaused(false);
+      // Stop MediaRecorder
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      // Stop SpeechRecognition
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+    }
+  };
+
+  // Pause/Resume speech recognition (optional)
   const handlePauseRecording = () => {
     setIsPaused(true);
+    if (recognitionRef.current) recognitionRef.current.abort();
+    if (mediaRecorderRef.current) mediaRecorderRef.current.pause();
   };
-
   const handleResumeRecording = () => {
     setIsPaused(false);
+    if (mediaRecorderRef.current) mediaRecorderRef.current.resume();
+    if (recognitionRef.current) recognitionRef.current.start();
   };
+
+  // Update reading speed as time passes
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording && !isPaused) {
+      interval = setInterval(() => {
+        setElapsedTime((prev: number) => {
+          const next = prev + 1;
+          setReadingSpeed(next > 0 ? Math.round((wordsRead / (next / 60))) : 0);
+          return next;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording, isPaused, wordsRead]);
 
   const loadPdfContent = async (pdfUrl: string) => {
     try {
@@ -385,6 +615,94 @@ const ReadingSessionPage: React.FC = () => {
     };
   }, [isRecording, isPaused]);
 
+  const [isAlphanumericArr, setIsAlphanumericArr] = useState<boolean[]>([]);
+  useEffect(() => {
+    if (storyText && storyText.trim().length > 0) {
+      setDebugStoryText(storyText);
+      const { displayWords, normalizedWords, isAlphanumeric } = splitAndNormalizeWords(storyText);
+      setWords(displayWords);
+      setDebugStoryWords(normalizedWords);
+      setIsAlphanumericArr(isAlphanumeric);
+      console.log('DEBUG: Loaded storyText:', storyText);
+    } else if (pdfContent && pdfContent.trim().length > 0) {
+      setDebugStoryText(pdfContent);
+      const { displayWords, normalizedWords, isAlphanumeric } = splitAndNormalizeWords(pdfContent);
+      setWords(displayWords);
+      setDebugStoryWords(normalizedWords);
+      setIsAlphanumericArr(isAlphanumeric);
+      console.log('DEBUG: Loaded pdfContent:', pdfContent);
+    } else {
+      setDebugStoryText('');
+      setDebugStoryWords([]);
+      setIsAlphanumericArr([]);
+      console.warn('DEBUG: No storyText or pdfContent loaded');
+    }
+  }, [storyText, pdfContent]);
+
+  // State for real words (for matching/highlighting)
+  const [realWords, setRealWords] = useState<string[]>([]);
+
+  // When loading storyText/pdfContent, extract real words for matching
+  useEffect(() => {
+    let text = '';
+    if (storyText && storyText.trim().length > 0) {
+      text = storyText;
+    } else if (pdfContent && pdfContent.trim().length > 0) {
+      text = pdfContent;
+    }
+    if (text) {
+      setRealWords(extractWordsFromText(text));
+    } else {
+      setRealWords([]);
+    }
+  }, [storyText, pdfContent]);
+
+  // Update the useEffect that tracks transcript and currentWordIndex, using realWords for matching
+  useEffect(() => {
+    if (!transcript || !realWords.length) return;
+    // Split transcript into words
+    const transcriptWords = transcript.split(/\s+/).filter(Boolean);
+    // Use a pointer for the current real word
+    let idx = currentWordIndex;
+    let spokenIdx = 0;
+    while (idx < realWords.length && spokenIdx < transcriptWords.length) {
+      if (isWordMatch(transcriptWords[spokenIdx], realWords[idx])) {
+        idx++;
+        spokenIdx++;
+      } else {
+        spokenIdx++;
+      }
+    }
+    setCurrentWordIndex(idx);
+    setWordsRead(idx); // wordsRead = number of real words matched
+  }, [transcript, realWords]);
+
+  // Reset miscues at the start of each session
+  useEffect(() => {
+    setMiscues(0);
+  }, [sessionId]);
+
+  // Update miscues calculation to use realWords and isWordMatch
+  useEffect(() => {
+    if (!transcript || !realWords.length) return;
+    const transcriptWords = transcript.split(/\s+/).filter(Boolean);
+    let idx = 0;
+    let spokenIdx = 0;
+    let miscuesCount = 0;
+    while (idx < realWords.length && spokenIdx < transcriptWords.length) {
+      if (isWordMatch(transcriptWords[spokenIdx], realWords[idx])) {
+        idx++;
+        spokenIdx++;
+      } else {
+        miscuesCount++;
+        spokenIdx++;
+      }
+    }
+    // Add any remaining real words not read as miscues
+    miscuesCount += realWords.length - idx;
+    setMiscues(miscuesCount);
+  }, [transcript, realWords]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -432,217 +750,267 @@ const ReadingSessionPage: React.FC = () => {
       // Could add toast notification here for error feedback
     }
   };
-  const handleStopRecording = async () => {
-    try {
-      // Stop any active recording - should be implemented in a recording service or context
-      // Example: await recordingService.stop();
 
-      // Save the recording data with the session
-      if (sessionId) {
-        // Example: await readingSessionService.saveRecording(sessionId, recordingData);
-
-        // Update session status if needed
-        await readingSessionService.updateSessionStatus(sessionId, 'completed');
-
-        // Update local state
-        if (currentSession) {
-          setCurrentSession({
-            ...currentSession,
-            status: 'completed'
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      // Could add error handling UI feedback here
-    }
+  // Download audio handler
+  const handleDownloadAudio = () => {
+    if (!audioBlob || !audioUrl) return;
+    const a = document.createElement('a');
+    a.href = audioUrl;
+    a.download = `${currentSession?.title || 'audio-recording'}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
+
   function formatTime(elapsedTime: number): string {
     const minutes = Math.floor(elapsedTime / 60);
     const seconds = elapsedTime % 60;
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
+  // In the rendering, highlight only if the display word is the current real word
+  // To do this, map realWords to their positions in the display words array
+  // We'll build a mapping from real word index to display word index
+  function getDisplayWordIndexForRealWord(realWordIdx: number, displayWords: string[]): number {
+    let count = 0;
+    for (let i = 0; i < displayWords.length; i++) {
+      if (/\w+/.test(displayWords[i])) {
+        if (count === realWordIdx) return i;
+        count++;
+      }
+    }
+    return -1;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
-        <div className="container-fluid px-4 sm:px-6 lg:px-8">
-          <div className="py-4 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleGoBack}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              >
-                <ArrowLeftIcon className="h-4 w-4 mr-2" />
-                Back
-              </button>
-              <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  currentSession.status === 'completed'
-                    ? 'bg-green-100 text-green-800'
-                    : currentSession.status === 'in-progress'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
-                </span>
-                {currentSession.status === 'in-progress' && (
-                  <span className="text-sm text-gray-500">
-                    {formatTime(elapsedTime)}
-                  </span>
-                )}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 flex flex-col">
+      {/* Title */}
+      <header className="w-full px-4 sm:px-8 pt-8 pb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleGoBack}
+              className="inline-flex items-center px-3 py-2 text-base font-semibold text-blue-700 bg-white/80 border border-blue-200 rounded-lg shadow hover:bg-blue-50 transition"
+              title="Back"
+            >
+              <ArrowLeftIcon className="h-5 w-5 mr-2" />
+              Back
+            </button>
+            <h1 className="text-3xl font-extrabold text-blue-900 drop-shadow-sm mb-2">
+              {currentSession?.title || 'Reading Session'}
+            </h1>
+          </div>
+          {currentSession && (
+            <span className={`ml-4 px-4 py-2 rounded-full text-base font-semibold shadow transition-all duration-200
+              ${currentSession.status === 'completed' ? 'bg-green-100 text-green-700' :
+                currentSession.status === 'in-progress' ? 'bg-blue-100 text-blue-700 animate-pulse' :
+                'bg-yellow-100 text-yellow-700'}`}
+            >
+              {currentSession.status.charAt(0).toUpperCase() + currentSession.status.slice(1)}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* Display last recognized word */}
+      {isRecording && (
+        <div className="w-full flex justify-center mb-4">
+          <div className="bg-yellow-100 border border-yellow-300 rounded-lg px-6 py-3 flex items-center gap-3 shadow text-lg">
+            <span className="font-semibold text-yellow-800">Mic heard:</span>
+            <span className="font-mono text-yellow-900 text-xl font-bold">{transcript.trim().split(/\s+/).filter(Boolean).slice(-1)[0] || '-'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Story Content + Progress Side by Side */}
+      <section className="w-full px-4 sm:px-8 mb-6 flex flex-col lg:flex-row gap-8">
+        {/* Story Content */}
+        <div className="flex-1">
+          <div className="relative bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-10 overflow-hidden max-h-[48rem]">
+            {/* Progress Bar */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-t-3xl animate-pulse" style={{ width: `${Math.min((currentWordIndex / words.length) * 100, 100)}%` }}></div>
+            <div className="mb-8 flex items-center justify-between">
+              <h3 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
+                <BookOpenIcon className="h-7 w-7 text-blue-500" /> Story Content
+              </h3>
+              <div className="flex items-center gap-6 text-lg text-blue-700">
+                <span>{words.length} words</span>
+                <span>•</span>
+                <span>{storyText ? storyText.split('\n\n').length : pdfContent.split('\n\n').length} paragraphs</span>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              {currentSession.status === 'in-progress' && (
-                <button
-                  onClick={handleCompleteSession}
-                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
-                >
-                  Complete Session
-                </button>
+            <div className="max-h-[38rem] overflow-y-auto custom-scrollbar prose prose-xl prose-blue bg-white/60 rounded-xl p-8 shadow-inner text-[1.35rem] leading-relaxed tracking-wide">
+              {(storyText || pdfContent) ? (
+                (storyText ? storyText : pdfContent).split('\n\n').filter(p => p.trim().length > 0).map((paragraph, paragraphIndex, paragraphs) => {
+                  const wordsInParagraph = paragraph.trim().split(/\s+/);
+                  return (
+                    <div key={paragraphIndex} className="mb-8 last:mb-0">
+                      <p className="text-gray-800 leading-relaxed flex flex-wrap gap-y-3">
+                        {wordsInParagraph.map((word, wordIndex) => {
+                          const globalWordIndex = paragraphs
+                            .slice(0, paragraphIndex)
+                            .reduce((acc, p) => acc + p.trim().split(/\s+/).length, 0) + wordIndex;
+                          const isCurrentWord = getDisplayWordIndexForRealWord(currentWordIndex, wordsInParagraph) === globalWordIndex;
+                          const isSpecialChar = !/\w+/.test(word);
+                          return (
+                            <span
+                              key={`${paragraphIndex}-${wordIndex}`}
+                              className={
+                                isSpecialChar
+                                  ? 'inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl text-gray-400 bg-transparent pointer-events-none select-none not-allowed'
+                                  : `inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl transition-all duration-200 ` +
+                                    (isCurrentWord
+                                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold shadow-lg scale-110 animate-pulse'
+                                      : 'bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
+                              }
+                              style={isCurrentWord ? { boxShadow: '0 0 12px 2px #a5b4fc' } : {}}
+                            >
+                              {word}
+                            </span>
+                          );
+                        })}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center text-gray-400 py-12">No story content available</div>
               )}
             </div>
+            {(pdfError || error) && !storyText && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 rounded-3xl shadow-xl z-10">
+                <XCircleIcon className="h-16 w-16 text-red-400 mb-4" />
+                <div className="text-lg text-red-600 mb-4">{pdfError || error}</div>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="container-fluid px-4 sm:px-6 lg:px-8 py-6">
-        {/* Session Info Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="flex items-start space-x-3">
-              <BookOpenIcon className="h-5 w-5 text-blue-600 mt-1" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">{currentSession.title}</h2>
-                <p className="text-sm text-gray-500 mt-1">{currentSession.book}</p>
+        {/* Progress Column */}
+        <div className="w-full lg:w-80 flex-shrink-0">
+          <div className="flex flex-col gap-4">
+            {/* Students */}
+            <div className="rounded-xl bg-blue-100 shadow p-4 flex flex-col items-center">
+              <span className="text-blue-700 font-bold text-lg mb-1 flex items-center gap-2"><UserGroupIcon className="h-5 w-5 text-blue-500" />Students</span>
+              <div className="flex flex-wrap gap-1 justify-center">
+                {currentSession?.students.map((student: string, idx: number) => (
+                  <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-200 text-blue-800 shadow-sm">
+                    {student}
+                  </span>
+                ))}
               </div>
             </div>
-            <div className="flex items-start space-x-3">
-              <UserGroupIcon className="h-5 w-5 text-blue-600 mt-1" />
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Students</h3>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {currentSession.students.map((student: string, index: number) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                    >
-                      {student}
-                    </span>
-                  ))}
-                </div>
-              </div>
+            {/* Words Read */}
+            <div className="rounded-xl bg-blue-100 shadow p-4 flex flex-col items-center">
+              <span className="text-blue-700 font-bold text-lg">Words Read</span>
+              <span className="text-2xl font-extrabold text-blue-700 mt-1">{wordsRead}</span>
             </div>
-            <div className="flex items-start space-x-3">
-              <ClockIcon className="h-5 w-5 text-blue-600 mt-1" />
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Started</h3>
-                <p className="text-sm text-gray-900 mt-1">
-                  {currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleString() : 'N/A'}
-                </p>
-              </div>
+            {/* Miscues */}
+            <div className="rounded-xl bg-red-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-red-700 font-bold">Miscues</span>
+              <span className="text-xl font-extrabold text-red-700">{miscues}</span>
             </div>
-            <div className="flex items-start space-x-3">
-              <ChartBarIcon className="h-5 w-5 text-blue-600 mt-1" />
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Progress</h3>
-                <div className="mt-1">
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${Math.min((currentWordIndex / words.length) * 100, 100)}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {Math.round((currentWordIndex / words.length) * 100)}% Complete
-                  </p>
-                </div>
-              </div>
+            {/* Oral Reading Score */}
+            <div className="rounded-xl bg-yellow-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-yellow-700 font-bold">Oral Reading Score</span>
+              <span className="text-xl font-extrabold text-yellow-700">{oralReadingScore}%</span>
             </div>
-          </div>
-        </div>
-
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Story Content Panel */}
-          <div className="lg:col-span-3">
-            {renderStoryContent()}
-          </div>
-
-          {/* Progress Panel */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6">
-              <div className="flex items-center space-x-2 mb-6">
-                <ChartBarIcon className="h-5 w-5 text-blue-600" />
-                <h3 className="text-lg font-medium text-gray-900">Reading Progress</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Reading Speed</h4>
-                  <p className="text-2xl font-semibold text-gray-900">0 WPM</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Accuracy</h4>
-                  <p className="text-2xl font-semibold text-gray-900">0%</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Time Elapsed</h4>
-                  <p className="text-2xl font-semibold text-gray-900">{formatTime(elapsedTime)}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Words Read</h4>
-                  <p className="text-2xl font-semibold text-gray-900">{currentWordIndex}</p>
-                </div>
-              </div>
+            {/* Reading Speed */}
+            <div className="rounded-xl bg-green-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-green-700 font-bold">Reading Speed</span>
+              <span className="text-xl font-extrabold text-green-700">{readingSpeedWPM} WPM</span>
+            </div>
+            {/* Comprehension */}
+            <div className="rounded-xl bg-blue-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-blue-700 font-bold">Comprehension</span>
+              <span className="text-xl font-extrabold text-blue-700 ml-2">{comprehensionAnswers}/{totalComprehensionQuestions} ({comprehensionPercent}%)</span>
+            </div>
+            {/* Elapsed */}
+            <div className="rounded-xl bg-yellow-100 shadow p-4 flex flex-col items-center">
+              <span className="text-yellow-700 font-bold text-lg">Elapsed</span>
+              <span className="text-2xl font-extrabold text-yellow-700 mt-1">{formatTime(elapsedTime)}</span>
+            </div>
+            {/* Book */}
+            <div className="rounded-xl bg-indigo-100 shadow p-4 flex flex-col items-center">
+              <span className="text-indigo-700 font-bold text-lg">Book</span>
+              <span className="text-lg font-semibold text-indigo-700 mt-1">{currentSession?.book}</span>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Recording Controls */}
-        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-center space-x-4">
+      {/* Session Controls */}
+      <section className="w-full px-4 sm:px-8 pb-8">
+        <div className="bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-8 flex flex-col items-center gap-6">
+          <div className="flex items-center gap-4 mb-2">
+            <MicrophoneIcon className="h-7 w-7 text-blue-500" />
+            <h4 className="text-lg font-bold text-blue-900">Session Controls</h4>
+          </div>
+          <div className="flex flex-row flex-wrap justify-center gap-6 w-full">
             {!isRecording ? (
               <button
                 onClick={handleStartRecording}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xl font-bold shadow-lg hover:scale-105 hover:from-blue-600 hover:to-purple-600 transition-all duration-200"
+                title="Start Session"
               >
-                <MicrophoneIcon className="h-5 w-5 mr-2" />
-                Start Session
+                <MicrophoneIcon className="h-7 w-7" /> Start
               </button>
             ) : (
               <>
                 {isPaused ? (
                   <button
                     onClick={handleResumeRecording}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                    className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 to-blue-400 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                    title="Resume Recording"
                   >
-                    <PlayIcon className="h-5 w-5 mr-2" />
-                    Resume Recording
+                    <PlayIcon className="h-7 w-7" /> Resume
                   </button>
                 ) : (
                   <button
                     onClick={handlePauseRecording}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors duration-200"
+                    className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                    title="Pause Recording"
                   >
-                    <PauseIcon className="h-5 w-5 mr-2" />
-                    Pause Recording
+                    <PauseIcon className="h-7 w-7" /> Pause
                   </button>
                 )}
                 <button
                   onClick={handleStopRecording}
-                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                  title="Stop Recording"
                 >
-                  <StopIcon className="h-5 w-5 mr-2" />
-                  Stop Recording
+                  <StopIcon className="h-7 w-7" /> Stop
                 </button>
               </>
             )}
+            {currentSession?.status === 'in-progress' && (
+              <button
+                onClick={handleCompleteSession}
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-blue-500 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                title="Complete Session"
+              >
+                <ChartBarIcon className="h-7 w-7" /> Complete Session
+              </button>
+            )}
           </div>
+          {/* Download Audio Button (show only if audioUrl exists) */}
+          {audioUrl && (
+            <button
+              onClick={handleDownloadAudio}
+              className="mt-6 flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-400 to-blue-400 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+              title="Download audio recording"
+            >
+              <svg xmlns='http://www.w3.org/2000/svg' className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4' /></svg>
+              Download Audio
+            </button>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 };

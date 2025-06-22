@@ -1,16 +1,13 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import type { UserRole } from '../../services/authService';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import GroupIcon from '@mui/icons-material/Group';
 import AssignmentIcon from '@mui/icons-material/Assignment';
-import DownloadIcon from '@mui/icons-material/Download';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TaskIcon from '@mui/icons-material/Task';
-import FileCopyIcon from '@mui/icons-material/FileCopy';
 import SchoolIcon from '@mui/icons-material/School';
 import PersonIcon from '@mui/icons-material/Person';
 import Tooltip from '@mui/material/Tooltip';

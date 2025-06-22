@@ -5,11 +5,13 @@ import { useLocation } from 'react-router-dom';
 interface HeaderProps {
   isMobile: boolean;
   onMenuToggle: () => void;
+  isSidebarCollapsed?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
   isMobile,
-  onMenuToggle
+  onMenuToggle,
+  isSidebarCollapsed = false
 }) => {
   const { currentUser, userRole, signOut } = useAuth();
   const location = useLocation();
@@ -17,7 +19,15 @@ const Header: React.FC<HeaderProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const getPageTitle = () => {
-    const path = location.pathname.split('/').pop();
+    const pathParts = location.pathname.split('/');
+    // If the route is /teacher/reading-session/:sessionId, show 'Reading Session'
+    if (
+      pathParts.includes('reading-session') &&
+      pathParts[pathParts.length - 2] === 'reading-session'
+    ) {
+      return 'Reading Session';
+    }
+    const path = pathParts.pop();
     return path ? path.charAt(0).toUpperCase() + path.slice(1) : 'Dashboard';
   };
 
@@ -30,22 +40,31 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white shadow-sm">
+    <header className="bg-white shadow-sm z-[999]">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left side */}
           <div className="flex items-center">
-            {isMobile && (
-              <button
-                onClick={onMenuToggle}
-                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-              >
-                <span className="sr-only">Open menu</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <button
+              onClick={onMenuToggle}
+              className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none transition-colors duration-200"
+            >
+              <span className="sr-only">Toggle menu</span>
+              <span className="relative block h-6 w-6">
+                <svg
+                  className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
-              </button>
-            )}
+                <svg
+                  className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </span>
+            </button>
             <h1 className="text-xl font-semibold text-gray-900 ml-4">{getPageTitle()}</h1>
           </div>
 
@@ -55,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <button
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="p-2 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="p-2 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none transition-colors duration-200"
               >
                 <span className="sr-only">View notifications</span>
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -95,7 +114,7 @@ const Header: React.FC<HeaderProps> = ({
                     </div>
                     <button
                       onClick={handleSignOut}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none"
                     >
                       Sign out
                     </button>
