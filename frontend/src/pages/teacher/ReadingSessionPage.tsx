@@ -45,8 +45,88 @@ const ReadingSessionPage: React.FC = () => {
   const [debugStoryWords, setDebugStoryWords] = useState<string[]>([]);
   const [debugStoryText, setDebugStoryText] = useState('');
 
-  // Helper: Normalize text for comparison (lowercase, remove punctuation)
-  const normalize = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/gi, '');
+  // Add miscues and comprehension state
+  const [miscues, setMiscues] = useState(0);
+  const [comprehensionAnswers, setComprehensionAnswers] = useState(0);
+  const totalComprehensionQuestions = 7; // You can make this dynamic if needed
+
+  // Real-time Oral Reading Score (Accuracy)
+  const oralReadingScore = words.length > 0 ? ((words.length - miscues) / words.length * 100).toFixed(1) : '0.0';
+
+  // Real-time Reading Speed (WPM)
+  const readingSpeedWPM = elapsedTime > 0 ? ((wordsRead / elapsedTime) * 60).toFixed(0) : '0';
+
+  // Real-time Comprehension
+  const comprehensionPercent = totalComprehensionQuestions > 0 ? ((comprehensionAnswers / totalComprehensionQuestions) * 100).toFixed(0) : '0';
+
+  // Helper: Normalize text for comparison (lowercase, remove all non-word characters)
+  const normalize = (text: string) => text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+
+  // Helper: Check if a word contains any alphanumeric character
+  const isWordAlphanumeric = (word: string) => /[a-zA-Z0-9]/.test(word);
+
+  // --- Phonetic and Fuzzy Matching Helpers ---
+  // Simple Soundex implementation (for browser, no deps)
+  function soundex(s: string): string {
+    const a = s.toLowerCase().replace(/[^a-z]/g, '').split('');
+    if (!a.length) return '';
+    const f = a.shift()!;
+    const codes: { [key: string]: string } = {
+      a: '', e: '', i: '', o: '', u: '', y: '', h: '', w: '',
+      b: '1', f: '1', p: '1', v: '1',
+      c: '2', g: '2', j: '2', k: '2', q: '2', s: '2', x: '2', z: '2',
+      d: '3', t: '3',
+      l: '4',
+      m: '5', n: '5',
+      r: '6'
+    };
+    let r = f + a.map(c => codes[c] || '').join('');
+    r = r.replace(/(\d)\1+/g, '$1');
+    r = r.replace(/[^a-z\d]/g, '');
+    return (r + '000').slice(0, 4);
+  }
+
+  // Levenshtein distance implementation
+  function levenshtein(a: string, b: string): number {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const v0 = Array(b.length + 1).fill(0);
+    const v1 = Array(b.length + 1).fill(0);
+    for (let i = 0; i <= b.length; i++) v0[i] = i;
+    for (let i = 0; i < a.length; i++) {
+      v1[0] = i + 1;
+      for (let j = 0; j < b.length; j++) {
+        const cost = a[i] === b[j] ? 0 : 1;
+        v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+      }
+      for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
+    }
+    return v1[b.length];
+  }
+
+  /**
+   * Returns true if spokenWord and expectedWord are phonetically similar (Soundex) or have Levenshtein distance <= 1.
+   * For production, consider using 'natural' or 'double-metaphone' npm packages.
+   */
+  function isWordMatch(spokenWord: string, expectedWord: string): boolean {
+    const normSpoken = normalize(spokenWord);
+    const normExpected = normalize(expectedWord);
+    if (!normSpoken || !normExpected) return false;
+    // Phonetic match
+    if (soundex(normSpoken) === soundex(normExpected)) return true;
+    // Fuzzy match
+    if (levenshtein(normSpoken, normExpected) <= 1) return true;
+    return false;
+  }
+
+  // Helper: Split text into display words and normalized words, and mark if each is alphanumeric
+  const splitAndNormalizeWords = (text: string) => {
+    const displayWords = text.split(/\s+/).filter(Boolean);
+    const normalizedWords = displayWords.map(normalize);
+    const isAlphanumeric = displayWords.map(isWordAlphanumeric);
+    return { displayWords, normalizedWords, isAlphanumeric };
+  };
 
   // Start recording and speech recognition
   const handleStartRecording = () => {
@@ -530,42 +610,98 @@ const ReadingSessionPage: React.FC = () => {
     };
   }, [isRecording, isPaused]);
 
+  const [isAlphanumericArr, setIsAlphanumericArr] = useState<boolean[]>([]);
   useEffect(() => {
     if (storyText && storyText.trim().length > 0) {
       setDebugStoryText(storyText);
+      const { displayWords, normalizedWords, isAlphanumeric } = splitAndNormalizeWords(storyText);
+      setWords(displayWords);
+      setDebugStoryWords(normalizedWords);
+      setIsAlphanumericArr(isAlphanumeric);
       console.log('DEBUG: Loaded storyText:', storyText);
     } else if (pdfContent && pdfContent.trim().length > 0) {
       setDebugStoryText(pdfContent);
+      const { displayWords, normalizedWords, isAlphanumeric } = splitAndNormalizeWords(pdfContent);
+      setWords(displayWords);
+      setDebugStoryWords(normalizedWords);
+      setIsAlphanumericArr(isAlphanumeric);
       console.log('DEBUG: Loaded pdfContent:', pdfContent);
     } else {
       setDebugStoryText('');
+      setDebugStoryWords([]);
+      setIsAlphanumericArr([]);
       console.warn('DEBUG: No storyText or pdfContent loaded');
     }
   }, [storyText, pdfContent]);
 
-  // Add useEffect to update highlight as user speaks
+  // Update the useEffect that tracks transcript and currentWordIndex, skipping non-alphanumeric words and using isWordMatch
   useEffect(() => {
     if (!transcript || !words.length) return;
+    if (!isAlphanumericArr.length) return;
 
-    // Split transcript into normalized words
-    const spokenWords = transcript
-      .split(/\s+/)
-      .map(normalize)
-      .filter(Boolean);
+    const normalizedStoryWords = words.map(normalize);
+    const alphanumericFlags = isAlphanumericArr;
+    const spokenWords = transcript.split(/\s+/).map(normalize).filter(Boolean);
 
-    // Split words array into normalized words
-    const storyWords = words.map(normalize);
-
-    // Find the furthest index in storyWords that matches spokenWords in order
-    let matchIdx = 0;
-    for (let i = 0; i < spokenWords.length && matchIdx < storyWords.length; i++) {
-      if (spokenWords[i] === storyWords[matchIdx]) {
+    let matchIdx = 0; // index in story words
+    let spokenIdx = 0; // index in spoken words
+    while (matchIdx < normalizedStoryWords.length && spokenIdx < spokenWords.length) {
+      if (!alphanumericFlags[matchIdx]) {
         matchIdx++;
+        continue;
+      }
+      if (isWordMatch(spokenWords[spokenIdx], words[matchIdx])) {
+        matchIdx++;
+        spokenIdx++;
+      } else {
+        spokenIdx++;
       }
     }
-
+    while (matchIdx < normalizedStoryWords.length && !alphanumericFlags[matchIdx]) {
+      matchIdx++;
+    }
     setCurrentWordIndex(matchIdx);
-  }, [transcript, words]);
+    setWordsRead(alphanumericFlags.slice(0, matchIdx).filter(Boolean).length);
+  }, [transcript, words, isAlphanumericArr]);
+
+  // Reset miscues at the start of each session
+  useEffect(() => {
+    setMiscues(0);
+  }, [sessionId]);
+
+  // Update miscues calculation to use isWordMatch
+  useEffect(() => {
+    if (!transcript || !words.length) return;
+    if (!isAlphanumericArr.length) return;
+
+    const normalizedStoryWords = words.map(normalize);
+    const alphanumericFlags = isAlphanumericArr;
+    const spokenWords = transcript.split(/\s+/).map(normalize).filter(Boolean);
+
+    let matchIdx = 0;
+    let spokenIdx = 0;
+    let miscuesCount = 0;
+    while (matchIdx < normalizedStoryWords.length && spokenIdx < spokenWords.length) {
+      if (!alphanumericFlags[matchIdx]) {
+        matchIdx++;
+        continue;
+      }
+      if (isWordMatch(spokenWords[spokenIdx], words[matchIdx])) {
+        matchIdx++;
+        spokenIdx++;
+      } else {
+        miscuesCount++;
+        spokenIdx++;
+      }
+    }
+    while (matchIdx < normalizedStoryWords.length) {
+      if (alphanumericFlags[matchIdx]) {
+        miscuesCount++;
+      }
+      matchIdx++;
+    }
+    setMiscues(miscuesCount);
+  }, [transcript, words, isAlphanumericArr]);
 
   if (isLoading) {
     return (
@@ -701,14 +837,17 @@ const ReadingSessionPage: React.FC = () => {
                             .slice(0, paragraphIndex)
                             .reduce((acc, p) => acc + p.trim().split(/\s+/).length, 0) + wordIndex;
                           const isCurrentWord = currentWordIndex === globalWordIndex;
+                          const isSpecialChar = !isAlphanumericArr[globalWordIndex];
                           return (
                             <span
                               key={`${paragraphIndex}-${wordIndex}`}
                               className={
-                                `inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl transition-all duration-200 ` +
-                                (isCurrentWord
-                                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold shadow-lg scale-110 animate-pulse'
-                                  : 'bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
+                                isSpecialChar
+                                  ? 'inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl text-gray-400 bg-transparent pointer-events-none select-none not-allowed'
+                                  : `inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl transition-all duration-200 ` +
+                                    (isCurrentWord
+                                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold shadow-lg scale-110 animate-pulse'
+                                      : 'bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
                               }
                               style={isCurrentWord ? { boxShadow: '0 0 12px 2px #a5b4fc' } : {}}
                             >
@@ -757,20 +896,25 @@ const ReadingSessionPage: React.FC = () => {
               <span className="text-blue-700 font-bold text-lg">Words Read</span>
               <span className="text-2xl font-extrabold text-blue-700 mt-1">{wordsRead}</span>
             </div>
-            {/* Total Words */}
-            <div className="rounded-xl bg-purple-100 shadow p-4 flex flex-col items-center">
-              <span className="text-purple-700 font-bold text-lg">Total Words</span>
-              <span className="text-2xl font-extrabold text-purple-700 mt-1">{words.length}</span>
+            {/* Miscues */}
+            <div className="rounded-xl bg-red-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-red-700 font-bold">Miscues</span>
+              <span className="text-xl font-extrabold text-red-700">{miscues}</span>
+            </div>
+            {/* Oral Reading Score */}
+            <div className="rounded-xl bg-yellow-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-yellow-700 font-bold">Oral Reading Score</span>
+              <span className="text-xl font-extrabold text-yellow-700">{oralReadingScore}%</span>
             </div>
             {/* Reading Speed */}
-            <div className="rounded-xl bg-green-100 shadow p-4 flex flex-col items-center">
-              <span className="text-green-700 font-bold text-lg">Reading Speed</span>
-              <span className="text-2xl font-extrabold text-green-700 mt-1">{readingSpeed} WPM</span>
+            <div className="rounded-xl bg-green-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-green-700 font-bold">Reading Speed</span>
+              <span className="text-xl font-extrabold text-green-700">{readingSpeedWPM} WPM</span>
             </div>
-            {/* Accuracy */}
-            <div className="rounded-xl bg-pink-100 shadow p-4 flex flex-col items-center">
-              <span className="text-pink-700 font-bold text-lg">Accuracy</span>
-              <span className="text-2xl font-extrabold text-pink-700 mt-1">{accuracy}%</span>
+            {/* Comprehension */}
+            <div className="rounded-xl bg-blue-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
+              <span className="text-blue-700 font-bold">Comprehension</span>
+              <span className="text-xl font-extrabold text-blue-700 ml-2">{comprehensionAnswers}/{totalComprehensionQuestions} ({comprehensionPercent}%)</span>
             </div>
             {/* Elapsed */}
             <div className="rounded-xl bg-yellow-100 shadow p-4 flex flex-col items-center">
