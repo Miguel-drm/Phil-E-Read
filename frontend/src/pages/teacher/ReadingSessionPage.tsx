@@ -65,8 +65,13 @@ const ReadingSessionPage: React.FC = () => {
   // Helper: Check if a word contains any alphanumeric character
   const isWordAlphanumeric = (word: string) => /[a-zA-Z0-9]/.test(word);
 
-  // --- Phonetic and Fuzzy Matching Helpers ---
-  // Simple Soundex implementation (for browser, no deps)
+  // Helper: Extract all readable words (alphanumeric only) from text, skipping punctuation/symbols
+  function extractWordsFromText(text: string): string[] {
+    // This regex matches words with at least one alphanumeric character
+    return text.match(/\b\w+\b/g) || [];
+  }
+
+  // Helper: Simple Soundex implementation (for browser, no deps)
   function soundex(s: string): string {
     const a = s.toLowerCase().replace(/[^a-z]/g, '').split('');
     if (!a.length) return '';
@@ -634,74 +639,69 @@ const ReadingSessionPage: React.FC = () => {
     }
   }, [storyText, pdfContent]);
 
-  // Update the useEffect that tracks transcript and currentWordIndex, skipping non-alphanumeric words and using isWordMatch
+  // State for real words (for matching/highlighting)
+  const [realWords, setRealWords] = useState<string[]>([]);
+
+  // When loading storyText/pdfContent, extract real words for matching
   useEffect(() => {
-    if (!transcript || !words.length) return;
-    if (!isAlphanumericArr.length) return;
+    let text = '';
+    if (storyText && storyText.trim().length > 0) {
+      text = storyText;
+    } else if (pdfContent && pdfContent.trim().length > 0) {
+      text = pdfContent;
+    }
+    if (text) {
+      setRealWords(extractWordsFromText(text));
+    } else {
+      setRealWords([]);
+    }
+  }, [storyText, pdfContent]);
 
-    const normalizedStoryWords = words.map(normalize);
-    const alphanumericFlags = isAlphanumericArr;
-    const spokenWords = transcript.split(/\s+/).map(normalize).filter(Boolean);
-
-    let matchIdx = 0; // index in story words
-    let spokenIdx = 0; // index in spoken words
-    while (matchIdx < normalizedStoryWords.length && spokenIdx < spokenWords.length) {
-      if (!alphanumericFlags[matchIdx]) {
-        matchIdx++;
-        continue;
-      }
-      if (isWordMatch(spokenWords[spokenIdx], words[matchIdx])) {
-        matchIdx++;
+  // Update the useEffect that tracks transcript and currentWordIndex, using realWords for matching
+  useEffect(() => {
+    if (!transcript || !realWords.length) return;
+    // Split transcript into words
+    const transcriptWords = transcript.split(/\s+/).filter(Boolean);
+    // Use a pointer for the current real word
+    let idx = currentWordIndex;
+    let spokenIdx = 0;
+    while (idx < realWords.length && spokenIdx < transcriptWords.length) {
+      if (isWordMatch(transcriptWords[spokenIdx], realWords[idx])) {
+        idx++;
         spokenIdx++;
       } else {
         spokenIdx++;
       }
     }
-    while (matchIdx < normalizedStoryWords.length && !alphanumericFlags[matchIdx]) {
-      matchIdx++;
-    }
-    setCurrentWordIndex(matchIdx);
-    setWordsRead(alphanumericFlags.slice(0, matchIdx).filter(Boolean).length);
-  }, [transcript, words, isAlphanumericArr]);
+    setCurrentWordIndex(idx);
+    setWordsRead(idx); // wordsRead = number of real words matched
+  }, [transcript, realWords]);
 
   // Reset miscues at the start of each session
   useEffect(() => {
     setMiscues(0);
   }, [sessionId]);
 
-  // Update miscues calculation to use isWordMatch
+  // Update miscues calculation to use realWords and isWordMatch
   useEffect(() => {
-    if (!transcript || !words.length) return;
-    if (!isAlphanumericArr.length) return;
-
-    const normalizedStoryWords = words.map(normalize);
-    const alphanumericFlags = isAlphanumericArr;
-    const spokenWords = transcript.split(/\s+/).map(normalize).filter(Boolean);
-
-    let matchIdx = 0;
+    if (!transcript || !realWords.length) return;
+    const transcriptWords = transcript.split(/\s+/).filter(Boolean);
+    let idx = 0;
     let spokenIdx = 0;
     let miscuesCount = 0;
-    while (matchIdx < normalizedStoryWords.length && spokenIdx < spokenWords.length) {
-      if (!alphanumericFlags[matchIdx]) {
-        matchIdx++;
-        continue;
-      }
-      if (isWordMatch(spokenWords[spokenIdx], words[matchIdx])) {
-        matchIdx++;
+    while (idx < realWords.length && spokenIdx < transcriptWords.length) {
+      if (isWordMatch(transcriptWords[spokenIdx], realWords[idx])) {
+        idx++;
         spokenIdx++;
       } else {
         miscuesCount++;
         spokenIdx++;
       }
     }
-    while (matchIdx < normalizedStoryWords.length) {
-      if (alphanumericFlags[matchIdx]) {
-        miscuesCount++;
-      }
-      matchIdx++;
-    }
+    // Add any remaining real words not read as miscues
+    miscuesCount += realWords.length - idx;
     setMiscues(miscuesCount);
-  }, [transcript, words, isAlphanumericArr]);
+  }, [transcript, realWords]);
 
   if (isLoading) {
     return (
@@ -766,6 +766,20 @@ const ReadingSessionPage: React.FC = () => {
     const minutes = Math.floor(elapsedTime / 60);
     const seconds = elapsedTime % 60;
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  // In the rendering, highlight only if the display word is the current real word
+  // To do this, map realWords to their positions in the display words array
+  // We'll build a mapping from real word index to display word index
+  function getDisplayWordIndexForRealWord(realWordIdx: number, displayWords: string[]): number {
+    let count = 0;
+    for (let i = 0; i < displayWords.length; i++) {
+      if (/\w+/.test(displayWords[i])) {
+        if (count === realWordIdx) return i;
+        count++;
+      }
+    }
+    return -1;
   }
 
   return (
@@ -836,8 +850,8 @@ const ReadingSessionPage: React.FC = () => {
                           const globalWordIndex = paragraphs
                             .slice(0, paragraphIndex)
                             .reduce((acc, p) => acc + p.trim().split(/\s+/).length, 0) + wordIndex;
-                          const isCurrentWord = currentWordIndex === globalWordIndex;
-                          const isSpecialChar = !isAlphanumericArr[globalWordIndex];
+                          const isCurrentWord = getDisplayWordIndexForRealWord(currentWordIndex, wordsInParagraph) === globalWordIndex;
+                          const isSpecialChar = !/\w+/.test(word);
                           return (
                             <span
                               key={`${paragraphIndex}-${wordIndex}`}

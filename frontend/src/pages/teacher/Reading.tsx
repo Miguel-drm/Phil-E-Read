@@ -7,9 +7,9 @@ import { readingSessionService, type ReadingSession } from '../../services/readi
 import { UnifiedStoryService } from '../../services/UnifiedStoryService';
 import type { Story } from '../../types/Story';
 import { useNavigate } from 'react-router-dom';
-import { 
-  PlayIcon, 
-  PencilIcon, 
+import {
+  PlayIcon,
+  PencilIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
 
@@ -162,7 +162,7 @@ const Reading: React.FC = () => {
                 const gradeStudents = await loadStudentsByGrade(gradeId);
                 const studentList = document.getElementById('student-list');
                 if (studentList) {
-                  studentList.innerHTML = gradeStudents.length > 0 
+                  studentList.innerHTML = gradeStudents.length > 0
                     ? gradeStudents.map(student => `
                         <div class="flex items-center space-x-2 mb-2">
                           <input type="checkbox" id="student-${student.id}" value="${student.name}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
@@ -186,7 +186,7 @@ const Reading: React.FC = () => {
           const book = storySelect.value;
           const storyUrl = storySelect.options[storySelect.selectedIndex].getAttribute('data-url') || '';
           const gradeId = (document.getElementById('session-grade') as HTMLSelectElement).value;
-          
+
           const selectedStudents = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
             .map((checkbox: Element) => (checkbox as HTMLInputElement).value);
 
@@ -221,9 +221,9 @@ const Reading: React.FC = () => {
             ...sessionData,
             createdAt: new Date()
           };
-          
+
           setReadingSessions(prev => [...prev, newSession]);
-          
+
           await Swal.fire({
             icon: 'success',
             title: 'Session Created!',
@@ -320,7 +320,7 @@ const Reading: React.FC = () => {
               const gradeStudents = await loadStudentsByGrade(gradeId);
               const studentList = document.getElementById('student-list');
               if (studentList) {
-                studentList.innerHTML = gradeStudents.length > 0 
+                studentList.innerHTML = gradeStudents.length > 0
                   ? gradeStudents.map(student => `
                       <div class="flex items-center space-x-2 mb-2">
                         <input type="checkbox" id="student-${student.id}" value="${student.name}" 
@@ -342,7 +342,7 @@ const Reading: React.FC = () => {
               const gradeStudents = await loadStudentsByGrade(gradeId);
               const studentList = document.getElementById('student-list');
               if (studentList) {
-                studentList.innerHTML = gradeStudents.length > 0 
+                studentList.innerHTML = gradeStudents.length > 0
                   ? gradeStudents.map(student => `
                       <div class="flex items-center space-x-2 mb-2">
                         <input type="checkbox" id="student-${student.id}" value="${student.name}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
@@ -366,7 +366,7 @@ const Reading: React.FC = () => {
         const book = storySelect.value;
         const storyUrl = storySelect.options[storySelect.selectedIndex].getAttribute('data-url') || '';
         const gradeId = (document.getElementById('session-grade') as HTMLSelectElement).value;
-        
+
         const selectedStudents = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
           .map((checkbox: Element) => (checkbox as HTMLInputElement).value);
 
@@ -390,10 +390,10 @@ const Reading: React.FC = () => {
     if (formValues && session.id) {
       try {
         await readingSessionService.updateSession(session.id, formValues);
-        setReadingSessions(prev => 
+        setReadingSessions(prev =>
           prev.map(s => s.id === session.id ? { ...s, ...formValues } : s)
         );
-        
+
         await Swal.fire({
           icon: 'success',
           title: 'Session Updated!',
@@ -428,7 +428,7 @@ const Reading: React.FC = () => {
       try {
         await readingSessionService.deleteSession(sessionId);
         setReadingSessions(prev => prev.filter(s => s.id !== sessionId));
-        
+
         await Swal.fire({
           icon: 'success',
           title: 'Session Deleted!',
@@ -509,12 +509,12 @@ const Reading: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container-fluid px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
+          <div>
             <h1 className="text-3xl font-bold text-gray-900">Reading</h1>
             <p className="mt-1 text-sm text-gray-500">Manage reading sessions and explore stories</p>
-        </div>
+          </div>
           <button
             onClick={handleScheduleSession}
             className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center"
@@ -522,76 +522,70 @@ const Reading: React.FC = () => {
             <i className="fas fa-plus mr-2"></i>
             Start New Session
           </button>
-      </div>
+        </div>
 
-      {/* Tabs */}
+        {/* Tabs */}
         <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('sessions')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'sessions'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('sessions')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'sessions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+            >
               Active Sessions
-          </button>
-          <button
+            </button>
+            <button
               onClick={() => setActiveTab('stories')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'stories'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'stories'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+            >
               Stories
-          </button>
-        </nav>
-      </div>
+            </button>
+          </nav>
+        </div>
 
-      {/* Content */}
-      {activeTab === 'sessions' && (
+        {/* Content */}
+        {activeTab === 'sessions' && (
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Students</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Story</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
                   {readingSessions.map((session) => (
                     <tr key={session.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{session.title}</div>
-                        <div className="text-sm text-gray-500">
-                          {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : 'N/A'}
-                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
                           {session.students.join(', ')}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{session.book}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          session.status === 'completed' 
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${session.status === 'completed'
                             ? 'bg-green-100 text-green-800'
                             : session.status === 'in-progress'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
                           {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                         </span>
-                    </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
                         {session.status === 'pending' && (
                           <button
@@ -618,21 +612,21 @@ const Reading: React.FC = () => {
                           <PencilIcon className="h-4 w-4 mr-1.5" />
                           Edit
                         </button>
-                      <button
+                        <button
                           onClick={() => session.id && handleDeleteSession(session.id)}
                           className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-900 hover:bg-red-50 rounded-md transition-colors"
-                      >
+                        >
                           <TrashIcon className="h-4 w-4 mr-1.5" />
                           Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {activeTab === 'stories' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 md:gap-6">
@@ -644,37 +638,37 @@ const Reading: React.FC = () => {
               <div className="col-span-full text-center py-10 text-gray-500">No stories available.</div>
             ) : (
               stories.map((story) => (
-  <div key={story._id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
-    <div className="relative pb-[56.25%] bg-gray-200">
-      {/* You might want to add a placeholder or actual cover image logic here if stories have one */}
-      <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-lg">
-        No Image
-      </div>
-    </div>
-    <div className="p-4 flex-grow">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-lg font-medium text-gray-900 line-clamp-1">{story.title}</h3>
-      </div>
-      <p className="text-sm text-gray-500 mb-4 line-clamp-2">
-        {story.description || 'No description available'}
-      </p>
-      <div className="flex items-center justify-between mt-auto">
-        <button 
-          onClick={() => handleViewStoryDetails(story)}
-          className="inline-flex items-center text-blue-600 hover:text-blue-900 text-sm font-medium"
-        >
-          <span>View Details</span>
-          <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-))
+                <div key={story._id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
+                  <div className="relative pb-[56.25%] bg-gray-200">
+                    {/* You might want to add a placeholder or actual cover image logic here if stories have one */}
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-lg">
+                      No Image
+                    </div>
+                  </div>
+                  <div className="p-4 flex-grow">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-medium text-gray-900 line-clamp-1">{story.title}</h3>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+                      {story.description || 'No description available'}
+                    </p>
+                    <div className="flex items-center justify-between mt-auto">
+                      <button
+                        onClick={() => handleViewStoryDetails(story)}
+                        className="inline-flex items-center text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      >
+                        <span>View Details</span>
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
-        </div>
-      )}
+          </div>
+        )}
       </div>
     </div>
   );

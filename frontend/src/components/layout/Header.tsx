@@ -17,7 +17,15 @@ const Header: React.FC<HeaderProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const getPageTitle = () => {
-    const path = location.pathname.split('/').pop();
+    const pathParts = location.pathname.split('/');
+    // If the route is /teacher/reading-session/:sessionId, show 'Reading Session'
+    if (
+      pathParts.includes('reading-session') &&
+      pathParts[pathParts.length - 2] === 'reading-session'
+    ) {
+      return 'Reading Session';
+    }
+    const path = pathParts.pop();
     return path ? path.charAt(0).toUpperCase() + path.slice(1) : 'Dashboard';
   };
 
