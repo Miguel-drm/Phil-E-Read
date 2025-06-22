@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StatsCards from './StatsCards';
 import PerformanceChart from './PerformanceChart';
 import UpcomingSessions from './UpcomingSessions';
+import { useAuth } from '../../../contexts/AuthContext';
+import { gradeService, type ClassGrade } from '../../../services/gradeService';
+import { studentService, type Student } from '../../../services/studentService';
+import ClassPerformanceChart from './ClassPerformanceChart';
+import ReadingLevelDistributionChart from './ReadingLevelDistributionChart';
 
-const TeacherDashboard: React.FC = () => {
+interface TeacherDashboardProps {
+  showSessionsModal: boolean;
+  setShowSessionsModal: (show: boolean) => void;
+}
+
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ showSessionsModal, setShowSessionsModal }) => {
+  const { currentUser } = useAuth();
+  const [grades, setGrades] = useState<ClassGrade[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -11,7 +25,7 @@ const TeacherDashboard: React.FC = () => {
   const statsData = [
     {
       title: 'Total Students',
-      value: '32',
+      value: students.length.toString(),
       icon: 'fas fa-user-graduate',
       iconColor: 'text-[#3498DB]',
       bgColor: 'bg-blue-100',
@@ -52,6 +66,45 @@ const TeacherDashboard: React.FC = () => {
     studentScores: [65, 70, 68, 75, 82, 88],
     classAverages: [60, 62, 65, 68, 72, 75]
   };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (currentUser?.uid) {
+        try {
+          setIsLoading(true);
+          console.log('Current user UID:', currentUser.uid);
+          // Fetch class list (grades) for the teacher
+          const fetchedGrades = await gradeService.getGradesByTeacher(currentUser.uid);
+          console.log('Fetched grades:', fetchedGrades);
+          setGrades(fetchedGrades);
+          // Fetch students for each class in parallel
+          const allStudentsArrays = await Promise.all(
+            fetchedGrades.map(async (grade) => {
+              const studentsInGrade = await gradeService.getStudentsInGrade(grade.id!);
+              return studentsInGrade.map(s => ({
+                id: s.studentId,
+                name: s.name,
+                grade: grade.name,
+                readingLevel: '',
+                performance: 'Good' as const,
+                lastAssessment: '',
+                teacherId: currentUser.uid,
+                status: 'active' as const,
+              }));
+            })
+          );
+          setStudents(allStudentsArrays.flat());
+        } catch (error) {
+          console.error('Error fetching grades/students:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        console.log('No current user UID found.');
+      }
+    };
+    fetchData();
+  }, [currentUser]);
 
   const sessionsData = [
     {
@@ -101,6 +154,10 @@ const TeacherDashboard: React.FC = () => {
     }
   ];
 
+  // Add mock data for class performance
+  const classNames = ["Grade 1", "Grade 2", "Grade 3", "Grade 4"];
+  const classAverages = [75, 80, 85, 90];
+
   const handleMenuClick = (menuItem: string) => {
     setActiveMenuItem(menuItem);
   };
@@ -108,23 +165,53 @@ const TeacherDashboard: React.FC = () => {
   return (
     <>
       {/* Stats Cards */}
-      <StatsCards stats={statsData} />
+      <StatsCards stats={statsData} sessions={sessionsData} showSessionsModal={showSessionsModal} setShowSessionsModal={setShowSessionsModal} />
+      {/* Modal for Upcoming Sessions */}
+      {showSessionsModal && (
+        <div className="fixed inset-0 z-50 flex justify-end items-start bg-black bg-opacity-10">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm mt-8 mr-8 relative h-[32rem] flex flex-col">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl"
+              onClick={() => setShowSessionsModal(false)}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+            <div className="flex-1 overflow-y-auto pr-2">
+              <UpcomingSessions sessions={sessionsData} />
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Main Content Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Performance Chart */}
-        <div className="lg:col-span-2">
-          <PerformanceChart data={chartData} />
-        </div>
-        
-        {/* Upcoming Sessions */}
+      <div className="flex flex-col gap-3 mt-2">
+        {/* Students Performance - full width */}
         <div>
-          <UpcomingSessions sessions={sessionsData} />
+          <PerformanceChart
+            data={chartData}
+            grades={grades}
+            students={students}
+            isLoading={isLoading}
+          />
+        </div>
+        {/* Class Performance and Reading Level Distribution side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch">
+          <div className="h-full flex flex-col">
+            <ClassPerformanceChart
+              classNames={classNames}
+              classAverages={classAverages}
+              className="Classes"
+            />
+          </div>
+          <div className="h-full flex flex-col">
+            <ReadingLevelDistributionChart />
+          </div>
         </div>
       </div>
       
       {/* Recent Activity and Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mt-4 md:mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-2">
         {/* Recent Activity */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm p-4 md:p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-6 space-y-2 sm:space-y-0">

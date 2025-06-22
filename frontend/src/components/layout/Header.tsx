@@ -6,12 +6,14 @@ interface HeaderProps {
   isMobile: boolean;
   onMenuToggle: () => void;
   isSidebarCollapsed?: boolean;
+  onShowSessionsModal?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   isMobile,
   onMenuToggle,
-  isSidebarCollapsed = false
+  isSidebarCollapsed = false,
+  onShowSessionsModal
 }) => {
   const { currentUser, userRole, signOut } = useAuth();
   const location = useLocation();
@@ -89,7 +91,16 @@ const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
-
+            {/* Upcoming Sessions Button */}
+            {onShowSessionsModal && (
+              <button
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition-all duration-200 text-sm font-semibold"
+                onClick={onShowSessionsModal}
+              >
+                <i className="fas fa-calendar-alt mr-2"></i>
+                Upcoming Sessions
+              </button>
+            )}
             {/* Profile dropdown */}
             <div className="relative">
               <button

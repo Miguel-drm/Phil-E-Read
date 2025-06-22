@@ -305,7 +305,7 @@ const ClassList: React.FC = () => {
             <div class="mb-6">
               <div class="text-lg font-bold text-gray-900 mb-2">Student Details</div>
               <div class="space-y-2">
-                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name.replace(' | ', ' ')}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Grade</span><span class="text-gray-900">${student.grade}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Reading Level</span><span class="text-gray-900">${student.readingLevel}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Performance</span><span class="text-gray-900">${student.performance}</span></div>
@@ -655,7 +655,7 @@ const ClassList: React.FC = () => {
                     <tbody class="bg-white divide-y divide-gray-100">
                       ${validStudentsInGrade.map(student => `
                         <tr class="hover:bg-blue-50 transition-colors duration-150">
-                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name}</td>
+                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name.replace(' | ', ' ')}</td>
                           <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onclick="window.removeStudent('${student.studentId}')"
@@ -823,8 +823,7 @@ const ClassList: React.FC = () => {
           ageRange: formValues.ageRange.trim(),
           studentCount: 0,
           color: formValues.color,
-          isActive: true,
-          teacherId: currentUser?.uid || "default" // Use current user ID
+          isActive: true
         };
 
         await gradeService.createGrade(gradeData);
@@ -1435,27 +1434,11 @@ const ClassList: React.FC = () => {
                                 <div className="text-sm font-medium text-gray-900">
                                   {(() => {
                                     const studentFullName = student.name || '';
-                                    let surname = '';
-                                    let firstName = '';
-
+                                    // Remove the pipe and display as a single string
                                     if (studentFullName.includes(' | ')) {
-                                        // New format: "Surname | Firstname"
-                                        const parts = studentFullName.split(' | ');
-                                        surname = parts[0] || '';
-                                        firstName = parts[1] || '';
-                                    } else {
-                                        // Old format: "Firstname Surname" or just "Name"
-                                        const parts = studentFullName.trim().split(' ');
-                                        if (parts.length > 1) {
-                                            surname = parts[parts.length - 1]; // Last part is surname
-                                            firstName = parts.slice(0, -1).join(' '); // Rest is first name
-                                        } else {
-                                            firstName = parts[0] || ''; // If only one part, treat as first name
-                                            surname = ''; // No clear surname
-                                        }
+                                      return studentFullName.replace(' | ', ' ');
                                     }
-                                    // Combine them as "Surname Firstname"
-                                    return `${surname} ${firstName}`.trim();
+                                    return studentFullName;
                                   })()}
                                 </div>
                               </div>
@@ -1572,7 +1555,7 @@ const ClassList: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {importedStudents.map((student, index) => (
                     <tr key={index} className="hover:bg-blue-50 transition-colors duration-150">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name.replace(' | ', ' ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.grade}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.readingLevel}</td>
                     </tr>
