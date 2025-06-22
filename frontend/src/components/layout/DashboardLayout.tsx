@@ -155,7 +155,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           isMobile={isMobile}
           onMenuToggle={handleHeaderMenuClick}
           isSidebarCollapsed={sidebarCollapsed}
-          onShowSessionsModal={() => setShowSessionsModal(true)}
+          {...(userRole === 'teacher' ? { onShowSessionsModal: () => setShowSessionsModal(true) } : {})}
         />
         {/* Content Container */}
         <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 w-full min-w-0 pt-[var(--header-height,56px)] md:pt-0">
@@ -166,7 +166,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         {/* Upcoming Sessions Modal (global) */}
         {showSessionsModal && (
           <div className="fixed inset-0 z-50 flex justify-end items-start bg-black bg-opacity-10">
-            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm mt-8 mr-8 relative h-[32rem] flex flex-col">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm mt-20 mr-8 relative h-[32rem] flex flex-col">
               <button
                 className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl"
                 onClick={() => setShowSessionsModal(false)}

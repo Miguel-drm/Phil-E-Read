@@ -320,19 +320,15 @@ class GradeService {
     try {
       const gradeRef = doc(db, this.collectionName, gradeId);
       const studentsRef = collection(gradeRef, this.studentsSubcollection);
-      
       // Find the student document
       const q = query(studentsRef, where('studentId', '==', studentId));
       const querySnapshot = await getDocs(q);
-      
       if (!querySnapshot.empty) {
         const studentDoc = querySnapshot.docs[0];
         await deleteDoc(doc(studentsRef, studentDoc.id));
-
-        // Update student count
-        const gradeDoc = await getDoc(gradeRef);
-        const currentCount = gradeDoc.data()?.studentCount || 0;
-        await this.updateStudentCount(gradeId, Math.max(0, currentCount - 1));
+        // Update student count based on actual students left
+        const studentsInGrade = await this.getStudentsInGrade(gradeId);
+        await this.updateStudentCount(gradeId, studentsInGrade.length);
       }
     } catch (error) {
       console.error('Error removing student from grade:', error);
