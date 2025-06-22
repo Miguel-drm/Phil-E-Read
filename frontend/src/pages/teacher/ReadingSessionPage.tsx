@@ -346,7 +346,8 @@ const ReadingSessionPage: React.FC = () => {
     }
 
     // Show error if no content is available
-    if (pdfError || error) {
+    if ((pdfError || error) && !storyText) {
+      // Only show error if there is no text content fallback
       return (
         <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-gray-200">
           <XCircleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />

@@ -488,7 +488,7 @@ const Reading: React.FC = () => {
                   View PDF
                 </a>
                 <p class="text-xs text-gray-500 italic">
-                  Note: PDF may not be available due to technical issues. The story text content is available in the reading session.
+                  PDF may not be available. The story text content is available in the reading session.
                 </p>
               </div>
             ` : '<p class="text-red-500">No PDF available</p>'}
