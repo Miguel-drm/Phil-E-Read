@@ -342,7 +342,7 @@ const ReadingSessionPage: React.FC = () => {
     } catch (error) {
       console.error('Error loading PDF:', error);
       setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
-      throw error; // Re-throw the error so the outer catch can handle it
+      throw error;
     } finally {
       setIsLoadingPdf(false);
     }
