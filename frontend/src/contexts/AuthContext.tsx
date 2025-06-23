@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState, type ReactNode }
 import type { User } from 'firebase/auth';
 import { onAuthStateChange, signIn, signUp, signOutUser, resetPassword, getUserProfile, isProfileComplete } from '../services/authService';
 import type { UserProfile, UserRole } from '../services/authService';
-import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -10,11 +9,11 @@ interface AuthContextType {
   userRole: UserRole | null;
   loading: boolean;
   isProfileComplete: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<UserProfile | null>;
+  signUp: (email: string, password: string, displayName?: string) => Promise<UserProfile | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  refreshUserProfile: () => Promise<void>;
+  refreshUserProfile: () => Promise<UserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,81 +35,104 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChange(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        try {
-          const profile = await getUserProfile();
-          setUserProfile(profile);
-          setUserRole(profile?.role || null);
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          setUserProfile(null);
-          setUserRole(null);
-        }
-      } else {
-        setUserProfile(null);
-        setUserRole(null);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const handleSignIn = async (email: string, password: string) => {
-    // Clear all storage and state before login
-    localStorage.clear();
-    sessionStorage.clear();
-    setCurrentUser(null);
-    setUserProfile(null);
-    setUserRole(null);
-    try {
-      await signIn(email, password);
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleSignUp = async (email: string, password: string, displayName?: string) => {
-    try {
-      await signUp(email, password, displayName);
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOutUser();
-    } finally {
-      // Clear all storage and state after logout
-      localStorage.clear();
-      sessionStorage.clear();
-      setCurrentUser(null);
-      setUserProfile(null);
-      setUserRole(null);
-    }
-  };
-
-  const handleResetPassword = async (email: string) => {
-    try {
-      await resetPassword(email);
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const refreshUserProfile = async () => {
+  // Fetch user profile and role
+  const fetchAndSetUserProfile = async () => {
     try {
       const profile = await getUserProfile();
       setUserProfile(profile);
       setUserRole(profile?.role || null);
+      return profile;
     } catch (error) {
-      console.error('Error refreshing user profile:', error);
+      setUserProfile(null);
+      setUserRole(null);
+      return null;
+    }
+  };
+
+  // Listen to auth state changes
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = onAuthStateChange(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        setLoading(true);
+        await fetchAndSetUserProfile();
+        setLoading(false);
+      } else {
+        setUserProfile(null);
+        setUserRole(null);
+        setLoading(false);
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line
+  }, []);
+
+  // Sign in and immediately fetch profile
+  const handleSignIn = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      await signIn(email, password);
+      const profile = await fetchAndSetUserProfile();
+      setLoading(false);
+      return profile;
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  // Sign up, then sign in, then fetch profile
+  const handleSignUp = async (email: string, password: string, displayName?: string) => {
+    setLoading(true);
+    try {
+      await signUp(email, password, displayName);
+      await signIn(email, password);
+      const profile = await fetchAndSetUserProfile();
+      setLoading(false);
+      return profile;
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  // Sign out and clear state
+  const handleSignOut = async () => {
+    setLoading(true);
+    try {
+      await signOutUser();
+    } finally {
+      setCurrentUser(null);
+      setUserProfile(null);
+      setUserRole(null);
+      setLoading(false);
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  };
+
+  // Password reset
+  const handleResetPassword = async (email: string) => {
+    setLoading(true);
+    try {
+      await resetPassword(email);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Manual profile refresh
+  const refreshUserProfile = async () => {
+    setLoading(true);
+    try {
+      const profile = await fetchAndSetUserProfile();
+      setLoading(false);
+      return profile;
+    } catch (error) {
+      setLoading(false);
+      throw error;
     }
   };
 

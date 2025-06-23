@@ -3,6 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import backgroundImage from '../../assets/img/bg.png'; // Make sure to place bg.png in src/assets
 import Swal from 'sweetalert2';
 import { FaEnvelope, FaLock, FaUser, FaEye, FaEyeSlash, FaInfoCircle } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+import { getUserProfile } from '../../services/authService';
 
 interface SignupProps {
   onSwitchToLogin: () => void;
@@ -26,7 +28,8 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signUp, refreshUserProfile } = useAuth();
+  const { signUp, signIn, refreshUserProfile } = useAuth();
+  const navigate = useNavigate();
 
   const validateEmail = (email: string): boolean => {
     const domain = email.split('@')[1]?.toLowerCase();
@@ -57,16 +60,26 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
       setLoading(true);
       try {
         await signUp(email, password, name);
+        await signIn(email, password);
         await refreshUserProfile();
+        const profile = await getUserProfile();
         await Swal.fire({
           icon: 'success',
           title: 'Account Created Successfully!',
-          text: 'You can now log in with your credentials.',
-          timer: 2000,
+          text: 'Redirecting to your dashboard...',
+          timer: 1500,
           timerProgressBar: true,
           showConfirmButton: false
         });
-        onSwitchToLogin();
+        const userRole = profile?.role;
+        if (userRole === 'admin') navigate('/admin/dashboard');
+        else if (userRole === 'teacher') navigate('/teacher/dashboard');
+        else navigate('/parent/dashboard');
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setTouched(false);
       } catch (error: any) {
         const errorMessage = getErrorMessage(error.code);
         setError(errorMessage);

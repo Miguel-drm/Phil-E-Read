@@ -7,30 +7,36 @@ const RoleBasedRedirect: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading) {
-      if (!currentUser) {
-        // If not authenticated, redirect to login
-        navigate('/login');
-        return;
-      }
+    // Still loading user or role — do nothing yet
+    if (loading) return;
 
-      if (userRole) {
-        switch (userRole) {
-          case 'admin':
-            navigate('/admin/dashboard');
-            break;
-          case 'teacher':
-            navigate('/teacher/dashboard');
-            break;
-          case 'parent':
-            navigate('/parent/dashboard');
-            break;
-          default:
-            // If role is not set or invalid, redirect to login
-            console.error('Invalid user role:', userRole);
-            navigate('/login');
-        }
-      }
+    // User not logged in
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    // User logged in, but role not fetched yet
+    if (!userRole) {
+      console.warn('User logged in but role is missing.');
+      return;
+    }
+
+    // Role-based redirect
+    switch (userRole) {
+      case 'admin':
+        navigate('/admin/dashboard');
+        break;
+      case 'teacher':
+        navigate('/teacher/dashboard');
+        break;
+      case 'parent':
+        navigate('/parent/dashboard');
+        break;
+      default:
+        console.error('Invalid user role:', userRole);
+        navigate('/login');
+        break;
     }
   }, [currentUser, userRole, loading, navigate]);
 

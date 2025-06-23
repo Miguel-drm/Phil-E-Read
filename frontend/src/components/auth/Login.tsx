@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import backgroundImage from '../../assets/img/bg.png';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
+import Swal from 'sweetalert2';
+import { getUserProfile } from '../../services/authService';
 
 interface LoginProps {
   onSwitchToSignup: () => void;
@@ -19,7 +21,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
 
-  const { signIn, resetPassword } = useAuth();
+  const { signIn, resetPassword, refreshUserProfile } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,7 +32,20 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
       setLoading(true);
       try {
         await signIn(email, password);
-        navigate('/auth-redirect');
+        await refreshUserProfile();
+        const profile = await getUserProfile();
+        await Swal.fire({
+          icon: 'success',
+          title: 'Login Successful!',
+          text: 'Redirecting to your dashboard...',
+          timer: 1200,
+          timerProgressBar: true,
+          showConfirmButton: false
+        });
+        const userRole = profile?.role;
+        if (userRole === 'admin') navigate('/admin/dashboard');
+        else if (userRole === 'teacher') navigate('/teacher/dashboard');
+        else navigate('/parent/dashboard');
       } catch (error: any) {
         const errorMessage = getErrorMessage(error.code);
         setError(errorMessage);
@@ -82,7 +97,6 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
   if (showResetPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative" style={{backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center'}}>
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/70 via-blue-700/60 to-blue-400/40"></div>
         <div className="bg-white/90 rounded-2xl shadow-2xl p-8 w-full max-w-md flex flex-col gap-4 relative z-10 border border-blue-100">
           <div className="flex flex-col items-center mb-2">
             <img src="/assets/img/phil-logo.svg" alt="Phil-E-Read Logo" className="w-14 h-14 mb-2" />
