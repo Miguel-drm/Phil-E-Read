@@ -340,9 +340,8 @@ const ReadingSessionPage: React.FC = () => {
         throw pdfError;
       }
     } catch (error) {
-      console.error('Error loading PDF:', error);
       setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
-      throw error; // Re-throw the error so the outer catch can handle it
+      throw error;
     } finally {
       setIsLoadingPdf(false);
     }
@@ -369,7 +368,7 @@ const ReadingSessionPage: React.FC = () => {
 
         setCurrentSession(sessionData);
 
-        // Get all stories first
+        // Get all stories firsts
         const stories = await UnifiedStoryService.getInstance().getStories({});
         console.log('All stories:', stories);
 
