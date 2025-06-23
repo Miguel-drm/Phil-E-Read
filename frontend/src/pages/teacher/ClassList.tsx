@@ -239,6 +239,9 @@ const ClassList: React.FC = () => {
       // Reload students and statistics
       await loadStudents();
       await loadClassStatistics();
+      // Update student count in Firestore
+      const studentsInGrade = await gradeService.getStudentsInGrade(selectedGrade);
+      await gradeService.updateStudentCount(selectedGrade, studentsInGrade.length);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -305,7 +308,7 @@ const ClassList: React.FC = () => {
             <div class="mb-6">
               <div class="text-lg font-bold text-gray-900 mb-2">Student Details</div>
               <div class="space-y-2">
-                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name.replace(' | ', ' ')}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Grade</span><span class="text-gray-900">${student.grade}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Reading Level</span><span class="text-gray-900">${student.readingLevel}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Performance</span><span class="text-gray-900">${student.performance}</span></div>
@@ -385,7 +388,16 @@ const ClassList: React.FC = () => {
       try {
         const ids = students.map(s => s.id).filter((id): id is string => Boolean(id));
         if (ids.length > 0) {
+          // 1. Delete from main students collection
           await studentService.batchDeleteStudents(ids);
+          // 2. Delete from grade's subcollection
+          const studentsInGrade = await gradeService.getStudentsInGrade(selectedGrade);
+          for (const s of studentsInGrade) {
+            await gradeService.removeStudentFromGrade(selectedGrade, s.studentId);
+          }
+          // 3. Update the count (should now be 0)
+          const updatedStudentsInGrade = await gradeService.getStudentsInGrade(selectedGrade);
+          await gradeService.updateStudentCount(selectedGrade, updatedStudentsInGrade.length);
         }
         await loadGrades();
         await Swal.fire({
@@ -433,6 +445,9 @@ const ClassList: React.FC = () => {
         setStudents(prev => prev.filter(s => s.id !== studentId));
         await loadGrades();
         await loadClassStatistics();
+        // Update student count in Firestore
+        const studentsInGrade = await gradeService.getStudentsInGrade(selectedGrade);
+        await gradeService.updateStudentCount(selectedGrade, studentsInGrade.length);
       } catch (error) {
         Swal.close();
         showError('Failed to Remove', 'An error occurred while removing the student.');
@@ -459,10 +474,11 @@ const ClassList: React.FC = () => {
 
   // Load grades and their student counts
   const loadGrades = async () => {
+    if (!currentUser?.uid) return;
     setIsLoadingGrades(true);
     try {
       console.log('Starting to load grades...');
-      const gradesData = await gradeService.getActiveGrades();
+      const gradesData = await gradeService.getGradesByTeacher(currentUser.uid); // Only show classes for the current teacher
       console.log('Grades loaded successfully:', gradesData);
       // Get all students for the teacher
       let allStudents: Student[] = students;
@@ -655,7 +671,7 @@ const ClassList: React.FC = () => {
                     <tbody class="bg-white divide-y divide-gray-100">
                       ${validStudentsInGrade.map(student => `
                         <tr class="hover:bg-blue-50 transition-colors duration-150">
-                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name}</td>
+                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name.replace(' | ', ' ')}</td>
                           <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onclick="window.removeStudent('${student.studentId}')"
@@ -823,8 +839,7 @@ const ClassList: React.FC = () => {
           ageRange: formValues.ageRange.trim(),
           studentCount: 0,
           color: formValues.color,
-          isActive: true,
-          teacherId: currentUser?.uid || "default" // Use current user ID
+          isActive: true
         };
 
         await gradeService.createGrade(gradeData);
@@ -1435,27 +1450,11 @@ const ClassList: React.FC = () => {
                                 <div className="text-sm font-medium text-gray-900">
                                   {(() => {
                                     const studentFullName = student.name || '';
-                                    let surname = '';
-                                    let firstName = '';
-
+                                    // Remove the pipe and display as a single string
                                     if (studentFullName.includes(' | ')) {
-                                        // New format: "Surname | Firstname"
-                                        const parts = studentFullName.split(' | ');
-                                        surname = parts[0] || '';
-                                        firstName = parts[1] || '';
-                                    } else {
-                                        // Old format: "Firstname Surname" or just "Name"
-                                        const parts = studentFullName.trim().split(' ');
-                                        if (parts.length > 1) {
-                                            surname = parts[parts.length - 1]; // Last part is surname
-                                            firstName = parts.slice(0, -1).join(' '); // Rest is first name
-                                        } else {
-                                            firstName = parts[0] || ''; // If only one part, treat as first name
-                                            surname = ''; // No clear surname
-                                        }
+                                      return studentFullName.replace(' | ', ' ');
                                     }
-                                    // Combine them as "Surname Firstname"
-                                    return `${surname} ${firstName}`.trim();
+                                    return studentFullName;
                                   })()}
                                 </div>
                               </div>
@@ -1530,7 +1529,7 @@ const ClassList: React.FC = () => {
 
       {/* Import Preview Modal */}
       {showImportPreview && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none bg-black bg-opacity-60">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col pointer-events-auto overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-[#34495E] rounded-t-xl">
               <h3 className="text-lg font-semibold text-white">Import Preview</h3>
@@ -1572,7 +1571,7 @@ const ClassList: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {importedStudents.map((student, index) => (
                     <tr key={index} className="hover:bg-blue-50 transition-colors duration-150">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name.replace(' | ', ' ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.grade}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.readingLevel}</td>
                     </tr>

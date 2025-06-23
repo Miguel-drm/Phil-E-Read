@@ -3,10 +3,59 @@ import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import UpcomingSessions from '../dashboard/teacher/UpcomingSessions';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
+
+const sessionsData = [
+  {
+    id: '1',
+    title: 'Group Reading - Level 3',
+    time: 'Today, 10:30 AM',
+    type: 'group',
+    icon: 'fas fa-book',
+    iconColor: 'text-[#3498DB]',
+    bgColor: 'bg-blue-100',
+    students: ['S', 'M', 'J'],
+    studentCount: 6
+  },
+  {
+    id: '2',
+    title: 'Comprehension Assessment',
+    time: 'Tomorrow, 1:15 PM',
+    type: 'assessment',
+    icon: 'fas fa-clipboard-check',
+    iconColor: 'text-[#27AE60]',
+    bgColor: 'bg-green-100',
+    students: ['A', 'B', 'C'],
+    studentCount: 8
+  },
+  {
+    id: '3',
+    title: 'Individual Reading - Emma',
+    time: 'Jun 12, 9:00 AM',
+    type: 'individual',
+    icon: 'fas fa-user-edit',
+    iconColor: 'text-purple-500',
+    bgColor: 'bg-purple-100',
+    students: [],
+    studentCount: 1,
+    level: 'Level 4 Reader'
+  },
+  {
+    id: '4',
+    title: 'Guided Reading - Group B',
+    time: 'Jun 13, 11:30 AM',
+    type: 'group',
+    icon: 'fas fa-users',
+    iconColor: 'text-orange-500',
+    bgColor: 'bg-orange-100',
+    students: ['T', 'R', 'K'],
+    studentCount: 7
+  }
+];
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { currentUser, userRole } = useAuth();
@@ -15,6 +64,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
 
   if (!currentUser) {
     return null; 
@@ -105,6 +155,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           isMobile={isMobile}
           onMenuToggle={handleHeaderMenuClick}
           isSidebarCollapsed={sidebarCollapsed}
+          {...(userRole === 'teacher' ? { onShowSessionsModal: () => setShowSessionsModal(true) } : {})}
         />
         {/* Content Container */}
         <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 w-full min-w-0 pt-[var(--header-height,56px)] md:pt-0">
@@ -112,6 +163,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             {children}
           </div>
         </main>
+        {/* Upcoming Sessions Modal (global) */}
+        {showSessionsModal && (
+          <div className="fixed inset-0 z-50 flex justify-end items-start bg-black bg-opacity-10">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm mt-20 mr-8 relative h-[32rem] flex flex-col">
+              <button
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-xl"
+                onClick={() => setShowSessionsModal(false)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+              <div className="flex-1 overflow-y-auto pr-2">
+                <UpcomingSessions sessions={sessionsData} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (

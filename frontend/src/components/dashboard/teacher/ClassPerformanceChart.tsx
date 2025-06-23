@@ -1,46 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
-import { type Student } from '../../../services/studentService';
-import { type ClassGrade } from '../../../services/gradeService';
 
-interface PerformanceChartProps {
-  data: {
-    weeks: string[];
-    studentScores: number[];
-    classAverages: number[];
-  };
-  grades: ClassGrade[];
-  students: Student[];
-  isLoading: boolean;
+interface ClassPerformanceChartProps {
+  classNames: string[];
+  classAverages: number[];
+  className: string;
 }
 
-const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, students, isLoading }) => {
+const ClassPerformanceChart: React.FC<ClassPerformanceChartProps> = ({ classNames, classAverages, className }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
-  const [selectedGrade, setSelectedGrade] = useState<string>('');
-  const [selectedStudent, setSelectedStudent] = useState<string>('');
-  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
-
-  // Default to first grade if available
-  useEffect(() => {
-    if (grades.length > 0 && !selectedGrade) {
-      setSelectedGrade(grades[0].id || '');
-    }
-  }, [grades, selectedGrade]);
-
-  useEffect(() => {
-    if (selectedGrade) {
-      const grade = grades.find(g => g.id === selectedGrade);
-      if (grade) {
-        setFilteredStudents(students.filter(s => s.grade === grade.name));
-      } else {
-        setFilteredStudents([]);
-      }
-    } else {
-      setFilteredStudents([]);
-    }
-    setSelectedStudent('');
-  }, [selectedGrade, students, grades]);
 
   useEffect(() => {
     if (chartRef.current) {
@@ -62,7 +31,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
             params.forEach((param: any) => {
               const color = param.color;
               const value = param.value;
-              const name = param.seriesName || 'Score';
+              const name = param.seriesName;
               result += `
                 <div class=\"flex items-center justify-between mb-1\">\n                  <div class=\"flex items-center\">\n                    <div class=\"w-3 h-3 rounded-full mr-2\" style=\"background-color: ${color}\"></div>\n                    <span class=\"text-gray-600\">${name}</span>\n                  </div>\n                  <span class=\"font-semibold text-gray-800\">${value}%</span>\n                </div>
               `;
@@ -71,7 +40,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
           }
         },
         legend: {
-          data: ['Average Score', 'Class Average'],
+          data: ['Class Average'],
           textStyle: {
             fontSize: 12,
             color: '#6b7280'
@@ -89,7 +58,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
         xAxis: {
           type: 'category',
           boundaryGap: false,
-          data: data.weeks,
+          data: classNames,
           axisLabel: {
             fontSize: 11,
             color: '#6b7280',
@@ -128,39 +97,9 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
         },
         series: [
           {
-            name: 'Average Score',
-            type: 'line',
-            data: data.studentScores,
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            lineStyle: {
-              width: 3,
-              color: '#3b82f6'
-            },
-            itemStyle: {
-              color: '#3b82f6',
-              borderWidth: 2,
-              borderColor: '#ffffff'
-            },
-            areaStyle: {
-              color: {
-                type: 'linear',
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [
-                  { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
-                  { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
-                ]
-              }
-            }
-          },
-          {
             name: 'Class Average',
             type: 'line',
-            data: data.classAverages,
+            data: classAverages,
             smooth: true,
             symbol: 'circle',
             symbolSize: 8,
@@ -199,35 +138,15 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
         chartInstance.current?.dispose();
       };
     }
-  }, [data]);
+  }, [classNames, classAverages, className]);
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-4 transition-all duration-300 hover:shadow-lg">
       <div className="p-4">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 lg:mb-6 space-y-3 sm:space-y-0">
-          <h3 className="text-base md:text-lg font-semibold text-[#2C3E50]">Students Performance</h3>
-          <div className="flex items-center space-x-2">
-            <select
-              value={selectedGrade}
-              onChange={(e) => setSelectedGrade(e.target.value)}
-              className="px-2 py-1 text-xs border rounded-md"
-            >
-              {grades.length === 0 && <option value="">No Classes</option>}
-              {grades.map((grade) => (
-                <option key={grade.id} value={grade.id}>{grade.name}</option>
-              ))}
-            </select>
-            <select
-              value={selectedStudent}
-              onChange={(e) => setSelectedStudent(e.target.value)}
-              className="px-2 py-1 text-xs border rounded-md"
-              disabled={!selectedGrade}
-            >
-              <option value="">Select Student</option>
-              {filteredStudents.map((student) => (
-                <option key={student.id} value={student.id}>{student.name.replace(' | ', ' ')}</option>
-              ))}
-            </select>
+          <div>
+            <h3 className="text-base md:text-lg font-semibold text-[#2C3E50]">Class Performance</h3>
+            
           </div>
         </div>
         <div ref={chartRef} className="w-full h-64 sm:h-72" />
@@ -236,4 +155,4 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
   );
 };
 
-export default PerformanceChart; 
+export default ClassPerformanceChart; 

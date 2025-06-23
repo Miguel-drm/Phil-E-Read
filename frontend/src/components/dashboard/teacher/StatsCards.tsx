@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import UpcomingSessions from './UpcomingSessions';
 
 interface StatCard {
   title: string;
@@ -12,6 +13,9 @@ interface StatCard {
 
 interface StatsCardsProps {
   stats: StatCard[];
+  sessions: any[];
+  showSessionsModal: boolean;
+  setShowSessionsModal: (show: boolean) => void;
 }
 
 const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
@@ -49,32 +53,35 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
-      {stats.map((stat, index) => (
-        <div key={index} className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden">
-          <div className="p-4 sm:p-5 lg:p-6">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1">
-                  {stat.title}
-                </p>
-                <h3 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 truncate">
-                  {stat.value}
-                </h3>
+    <div className="relative mb-4">
+      {/* Stats Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {stats.map((stat, index) => (
+          <div key={index} className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-gray-500 text-sm font-medium truncate mb-1">
+                    {stat.title}
+                  </p>
+                  <h3 className="text-2xl font-bold text-gray-900 truncate">
+                    {stat.value}
+                  </h3>
+                </div>
+                <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center ${stat.iconColor} flex-shrink-0 ml-3 group-hover:scale-110 transition-transform duration-300`}>
+                  <i className={`${stat.icon} text-lg`}></i>
+                </div>
               </div>
-              <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl ${stat.bgColor} flex items-center justify-center ${stat.iconColor} flex-shrink-0 ml-3 group-hover:scale-110 transition-transform duration-300`}>
-                <i className={`${stat.icon} text-lg sm:text-xl`}></i>
+              <div className={`mt-3 flex items-center ${getChangeBgColor(stat.changeType)} rounded-lg px-2 py-1`}>
+                <i className={`${getChangeIcon(stat.changeType)} mr-1.5 text-xs ${getChangeColor(stat.changeType)}`}></i>
+                <span className={`text-xs font-medium ${getChangeColor(stat.changeType)} truncate`}>
+                  {stat.change}
+                </span>
               </div>
-            </div>
-            <div className={`mt-4 flex items-center ${getChangeBgColor(stat.changeType)} rounded-lg px-3 py-2`}>
-              <i className={`${getChangeIcon(stat.changeType)} mr-2 text-sm ${getChangeColor(stat.changeType)}`}></i>
-              <span className={`text-xs sm:text-sm font-medium ${getChangeColor(stat.changeType)} truncate`}>
-                {stat.change}
-              </span>
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 };
