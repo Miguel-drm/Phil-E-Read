@@ -25,14 +25,15 @@ const UpcomingSessions: React.FC<UpcomingSessionsProps> = ({ sessions }) => {
           <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">Upcoming Sessions</h3>
           <p className="text-sm text-gray-500">Your scheduled activities</p>
         </div>
-        <button className="text-blue-600 hover:text-blue-800 hover:underline text-sm font-medium cursor-pointer self-start sm:self-auto transition-colors duration-200">
+        <button className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg shadow transition-all duration-200 text-sm font-semibold self-start sm:self-auto">
+          <i className="fas fa-list mr-2"></i>
           View All
         </button>
       </div>
       <div className="space-y-3 lg:space-y-4">
         {sessions.map((session) => (
           <div key={session.id} className="group/session flex items-start p-3 sm:p-4 rounded-xl hover:bg-gray-50 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200">
-            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${session.bgColor} flex items-center justify-center ${session.iconColor} mr-3 sm:mr-4 flex-shrink-0 group-hover/session:scale-110 transition-transform duration-200`}>
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center text-white mr-3 sm:mr-4 flex-shrink-0 group-hover/session:scale-110 transition-transform duration-200`}>
               <i className={`${session.icon} text-sm sm:text-base`}></i>
             </div>
             <div className="flex-1 min-w-0">
@@ -81,7 +82,7 @@ const UpcomingSessions: React.FC<UpcomingSessionsProps> = ({ sessions }) => {
       
       {/* Quick Action */}
       <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100">
-        <button className="w-full flex items-center justify-center px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-all duration-200 group">
+        <button className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg transition-all duration-200 group shadow font-semibold">
           <i className="fas fa-plus mr-2 text-sm group-hover:scale-110 transition-transform duration-200"></i>
           <span className="font-medium text-sm">Schedule New Session</span>
         </button>

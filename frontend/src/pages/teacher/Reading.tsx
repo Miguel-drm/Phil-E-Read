@@ -13,6 +13,16 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 
+const sessionColors = [
+  'from-blue-50 to-indigo-50 border-blue-200 text-blue-900',
+  'from-green-50 to-emerald-50 border-green-200 text-green-900',
+  'from-yellow-50 to-orange-50 border-yellow-200 text-yellow-900',
+  'from-purple-50 to-pink-50 border-purple-200 text-purple-900',
+  'from-red-50 to-rose-50 border-red-200 text-red-900',
+  'from-gray-50 to-slate-50 border-gray-200 text-gray-900',
+];
+const getSessionColor = (idx: number) => sessionColors[idx % sessionColors.length];
+
 const Reading: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -507,40 +517,42 @@ const Reading: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container-fluid px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center py-2\ sm:py-6">
+      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 bg-white/90 rounded-2xl shadow-lg p-4 sm:p-8 border border-blue-100">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b border-blue-100 pb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Reading</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 tracking-tight flex items-center gap-2">
+              <i className="fas fa-book-reader text-blue-400"></i> Reading
+            </h1>
             <p className="mt-1 text-sm text-gray-500">Manage reading sessions and explore stories</p>
           </div>
           <button
             onClick={handleScheduleSession}
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md flex items-center justify-center"
+            className="w-full sm:w-auto bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold py-2 px-6 rounded-lg shadow transition-all duration-200 flex items-center justify-center text-base gap-2"
           >
-            <i className="fas fa-plus mr-2"></i>
+            <i className="fas fa-plus"></i>
             Start New Session
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-8">
+        <div className="border-b border-blue-100 mb-8">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('sessions')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'sessions'
+              className={`py-3 px-1 border-b-2 font-semibold text-sm transition-all duration-150 ${activeTab === 'sessions'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 hover:text-blue-700 hover:border-blue-300'
                 }`}
             >
               Active Sessions
             </button>
             <button
               onClick={() => setActiveTab('stories')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'stories'
+              className={`py-3 px-1 border-b-2 font-semibold text-sm transition-all duration-150 ${activeTab === 'stories'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  : 'border-transparent text-gray-500 hover:text-blue-700 hover:border-blue-300'
                 }`}
             >
               Stories
@@ -550,81 +562,75 @@ const Reading: React.FC = () => {
 
         {/* Content */}
         {activeTab === 'sessions' && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Students</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Story</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {readingSessions.map((session) => (
-                    <tr key={session.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{session.title}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          {session.students.join(', ')}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{session.book}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${session.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : session.status === 'in-progress'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                          {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                        {session.status === 'pending' && (
-                          <button
-                            onClick={() => session.id && handleProceedSession(session.id)}
-                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-md transition-colors"
-                          >
-                            <PlayIcon className="h-4 w-4 mr-1.5" />
-                            Proceed
-                          </button>
-                        )}
-                        {session.status === 'in-progress' && (
-                          <button
-                            onClick={() => session.id && handleProceedSession(session.id)}
-                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-md transition-colors"
-                          >
-                            <PlayIcon className="h-4 w-4 mr-1.5" />
-                            Continue
-                          </button>
-                        )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {readingSessions.length === 0 ? (
+              <div className="col-span-full text-center py-10 text-gray-400 italic">No sessions found. Click + to add a session.</div>
+            ) : (
+              readingSessions.map((session, idx) => (
+                <div
+                  key={session.id}
+                  className={`flex flex-col justify-between rounded-xl shadow-md border-2 bg-gradient-to-br ${getSessionColor(idx)} p-5 transition-all duration-200 hover:shadow-lg`}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="w-10 h-10 flex items-center justify-center rounded-full text-lg font-bold shadow bg-white/80 text-blue-500">
+                      <i className="fas fa-book-reader"></i>
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-base font-semibold break-words leading-tight">{session.title}</span>
+                      <span className="text-xs text-gray-500 truncate max-w-[120px]">{session.book}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 mb-2">
+                    <span className="text-xs font-medium text-gray-700">Students:</span>
+                    <span className="text-sm text-gray-900 truncate">{session.students.join(', ')}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${session.status === 'completed'
+                        ? 'bg-green-100 text-green-800'
+                        : session.status === 'in-progress'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                      {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {session.status === 'pending' && (
                         <button
-                          onClick={() => handleEditSession(session)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-yellow-600 hover:text-yellow-900 hover:bg-yellow-50 rounded-md transition-colors"
+                          onClick={() => session.id && handleProceedSession(session.id)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-white hover:bg-blue-500 rounded-md transition-colors"
                         >
-                          <PencilIcon className="h-4 w-4 mr-1.5" />
-                          Edit
+                          <PlayIcon className="h-4 w-4 mr-1.5" />
+                          Proceed
                         </button>
+                      )}
+                      {session.status === 'in-progress' && (
                         <button
-                          onClick={() => session.id && handleDeleteSession(session.id)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-900 hover:bg-red-50 rounded-md transition-colors"
+                          onClick={() => session.id && handleProceedSession(session.id)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-white hover:bg-blue-500 rounded-md transition-colors"
                         >
-                          <TrashIcon className="h-4 w-4 mr-1.5" />
-                          Delete
+                          <PlayIcon className="h-4 w-4 mr-1.5" />
+                          Continue
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                      <button
+                        onClick={() => handleEditSession(session)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-yellow-600 hover:text-white hover:bg-yellow-400 rounded-md transition-colors"
+                      >
+                        <PencilIcon className="h-4 w-4 mr-1.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => session.id && handleDeleteSession(session.id)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-white hover:bg-red-400 rounded-md transition-colors"
+                      >
+                        <TrashIcon className="h-4 w-4 mr-1.5" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -638,16 +644,16 @@ const Reading: React.FC = () => {
               <div className="col-span-full text-center py-10 text-gray-500">No stories available.</div>
             ) : (
               stories.map((story) => (
-                <div key={story._id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-full">
-                  <div className="relative pb-[56.25%] bg-gray-200">
+                <div key={story._id} className="bg-white rounded-xl shadow-md border border-blue-50 overflow-hidden flex flex-col h-full">
+                  <div className="relative pb-[56.25%] bg-blue-100 flex items-center justify-center">
                     {/* You might want to add a placeholder or actual cover image logic here if stories have one */}
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-lg">
+                    <div className="absolute inset-0 flex items-center justify-center text-blue-300 text-lg">
                       No Image
                     </div>
                   </div>
-                  <div className="p-4 flex-grow">
+                  <div className="p-4 flex-grow flex flex-col">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-medium text-gray-900 line-clamp-1">{story.title}</h3>
+                      <h3 className="text-lg font-semibold text-blue-900 line-clamp-1">{story.title}</h3>
                     </div>
                     <p className="text-sm text-gray-500 mb-4 line-clamp-2">
                       {story.description || 'No description available'}
@@ -655,7 +661,7 @@ const Reading: React.FC = () => {
                     <div className="flex items-center justify-between mt-auto">
                       <button
                         onClick={() => handleViewStoryDetails(story)}
-                        className="inline-flex items-center text-blue-600 hover:text-blue-900 text-sm font-medium"
+                        className="inline-flex items-center text-blue-600 hover:text-white hover:bg-blue-500 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
                       >
                         <span>View Details</span>
                         <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -5,8 +5,9 @@ import { gradeService, type ClassGrade } from '../../services/gradeService';
 import * as XLSX from 'xlsx';
 import { showInfo, showError, showSuccess, showConfirmation } from '../../services/alertService';
 import Swal from 'sweetalert2';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, onSnapshot, collection, doc } from 'firebase/firestore';
 import { getAllParents } from '../../services/authService';
+import { db } from '../../config/firebase';
 
 const ClassList: React.FC = () => {
   const { currentUser, userRole, isProfileComplete } = useAuth();
@@ -655,9 +656,7 @@ const ClassList: React.FC = () => {
           html: `
             <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
               <p class="mb-3 text-gray-700"><strong>Description:</strong> ${grade.description}</p>
-              <p class="mb-3 text-gray-700"><strong>Age Range:</strong> ${grade.ageRange}</p>
               <p class="mb-5 text-gray-700"><strong>Total Students:</strong> ${validStudentsInGrade.length}</p>
-              
               <h3 class="text-lg font-semibold text-gray-800 mb-3">Students in this Grade:</h3>
               <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg shadow-sm">
                 ${validStudentsInGrade.length > 0 ? `
@@ -794,10 +793,21 @@ const ClassList: React.FC = () => {
                 rows="2"
               ></textarea>
             </div>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Color</label>
+              <select id="grade-color" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="blue">Blue</option>
+                <option value="green">Green</option>
+                <option value="yellow">Yellow</option>
+                <option value="purple">Purple</option>
+                <option value="red">Red</option>
+                <option value="gray">Gray</option>
+              </select>
+            </div>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: isCreatingGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-white border-solid rounded-full animate-spin"></span> Creating...' : 'Create Grade',
+        confirmButtonText: isCreatingGrade ? '<span class="inline-flex items-center"><span class="loader-spinner mr-2 w-4 h-4 border-white border-solid rounded-full animate-spin"></span> Creating...</span>' : 'Create Grade',
         cancelButtonText: 'Cancel',
         focusConfirm: false,
         allowOutsideClick: !isCreatingGrade,
@@ -816,8 +826,8 @@ const ClassList: React.FC = () => {
           const gradeLevel = (document.getElementById('grade-level') as HTMLSelectElement).value;
           const section = (document.getElementById('grade-section') as HTMLInputElement).value.trim();
           const description = (document.getElementById('grade-description') as HTMLTextAreaElement).value;
-
-          if (!gradeLevel || !section || !description) {
+          const color = (document.getElementById('grade-color') as HTMLSelectElement).value;
+          if (!gradeLevel || !section || !description || !color) {
             Swal.showValidationMessage('Please fill in all required fields');
             return false;
           }
@@ -826,24 +836,20 @@ const ClassList: React.FC = () => {
           return {
             name: `${gradeLevel} - ${section}`,
             description,
-            ageRange: "6-12 years", // Default age range
-            color: "blue" // Default color
+            color
           };
         }
       });
-
       if (formValues) {
         const gradeData = {
           name: formValues.name.trim(),
           description: formValues.description.trim(),
-          ageRange: formValues.ageRange.trim(),
           studentCount: 0,
           color: formValues.color,
-          isActive: true
+          isActive: true,
+          ageRange: '' // Provide empty string for required field
         };
-
         await gradeService.createGrade(gradeData);
-
         await Swal.fire({
           icon: 'success',
           title: 'Grade Created!',
@@ -851,7 +857,6 @@ const ClassList: React.FC = () => {
           timer: 2000,
           showConfirmButton: false
         });
-
         await loadGrades();
       }
     } catch (error) {
@@ -1153,6 +1158,27 @@ const ClassList: React.FC = () => {
     }
   };
 
+  // Real-time student count updates for each grade
+  useEffect(() => {
+    if (!currentUser?.uid || grades.length === 0) return;
+    const unsubscribes: (() => void)[] = [];
+    const updateCounts = (gradeId: string) => {
+      const studentsRef = collection(db, 'classGrades', gradeId, 'students');
+      const unsubscribe = onSnapshot(studentsRef, (snapshot) => {
+        setGrades((prevGrades) => prevGrades.map((g) =>
+          g.id === gradeId ? { ...g, studentCount: snapshot.size } : g
+        ));
+      });
+      unsubscribes.push(unsubscribe);
+    };
+    grades.forEach((grade) => {
+      if (grade.id) updateCounts(grade.id);
+    });
+    return () => {
+      unsubscribes.forEach((unsub) => unsub());
+    };
+  }, [currentUser?.uid, grades.length]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1191,97 +1217,79 @@ const ClassList: React.FC = () => {
         <div className="grid grid-cols-12 gap-4">
           {/* Class Grades Section */}
           <div className="col-span-12 lg:col-span-3">
-            <div className="bg-white rounded-lg shadow h-[calc(100vh-6rem)]">
-              <div className="px-3 py-3 border-b border-gray-200 sm:px-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900">Class</h3>
-                  <div className="flex items-center space-x-2">
-                    {selectedGrades.length > 0 && (
-                      <button
-                        onClick={handleDeleteSelectedGrades}
-                        className="inline-flex items-center p-1.5 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                        title={`Delete ${selectedGrades.length} selected grade(s)`}
-                        disabled={isDeletingSelectedGrades || !canManage}
-                      >
-                        {isDeletingSelectedGrades ? (
-                          <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #ffffff', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                        ) : (
-                          <i className="fas fa-trash text-sm"></i>
-                        )}
-                      </button>
-                    )}
+            <div className="bg-gradient-to-b from-blue-50/60 to-white rounded-2xl shadow-lg h-[calc(100vh-6rem)] flex flex-col border border-blue-100">
+              <div className="px-4 py-4 border-b border-blue-100 flex items-center justify-between rounded-t-2xl bg-white/80">
+                <h3 className="text-lg font-bold text-blue-900 tracking-tight flex items-center gap-2">
+                  <i className="fas fa-layer-group text-blue-400"></i> Class Grades
+                </h3>
+                <div className="flex items-center gap-2">
+                  {selectedGrades.length > 0 && (
                     <button
-                      onClick={handleAddGrade}
-                      className="inline-flex items-center p-1.5 border border-transparent rounded-full shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      disabled={!canManage}
+                      onClick={handleDeleteSelectedGrades}
+                      className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 shadow focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 transition"
+                      title={`Delete ${selectedGrades.length} selected grade(s)`}
+                      disabled={isDeletingSelectedGrades || !canManage}
                     >
-                      <i className="fas fa-plus text-sm"></i>
+                      {isDeletingSelectedGrades ? (
+                        <span className="loader-spinner" style={{ display: 'inline-block', width: 18, height: 18, border: '2px solid #f3f3f3', borderTop: '2px solid #ef4444', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                      ) : (
+                        <i className="fas fa-trash text-lg"></i>
+                      )}
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={handleAddGrade}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-800 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition"
+                    disabled={!canManage}
+                    title="Add Grade"
+                  >
+                    <i className="fas fa-plus text-lg"></i>
+                  </button>
                 </div>
               </div>
-              <div className="h-[calc(100%-3rem)] overflow-y-auto">
-                <div className="divide-y divide-gray-200">
-                  {grades.map((grade) => (
-                    <div
-                      key={grade.id}
-                      className={`px-3 py-2 cursor-pointer transition-colors rounded-lg border ${
-                        selectedGrade === grade.id
-                          ? 'bg-blue-100 border-blue-500 shadow-md'
-                          : 'hover:bg-gray-50 border-transparent'
-                      } ${selectedGrades.includes(grade.id || '') ? 'bg-red-50' : ''}`}
-                      style={{ marginBottom: '4px' }}
-                      onClick={() => grade.id && handleGradeSelect(grade.id)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div
-                            className={`w-4 h-4 flex items-center justify-center rounded-full border-2 cursor-pointer transition-transform hover:scale-125 ${
-                              selectedGrades.includes(grade.id || '') ? 'border-green-500 bg-green-500' : 'border-gray-400 bg-white'
-                            }`}
-                            onClick={(e) => grade.id && handleGradeDotClick(e, grade.id)}
-                          >
-                            {selectedGrades.includes(grade.id || '') && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm font-medium text-gray-900">{grade.name}</span>
+              {/* Improved Grade Cards Container */}
+              <div className="flex-1 overflow-y-auto p-2">
+                <div className="flex flex-col gap-4 min-w-0 max-w-full lg:flex-col lg:flex-wrap">
+                  {grades.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8 italic w-full">No grades found. Click + to add a grade.</div>
+                  ) : (
+                    grades.map((grade) => (
+                      <div
+                        key={grade.id}
+                        className={`flex flex-col justify-between w-full max-w-full rounded-xl shadow-md border-2 cursor-pointer transition-all duration-200 bg-white/90 hover:shadow-lg ${selectedGrade === grade.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-blue-100'} ${selectedGrades.includes(grade.id || '') ? 'bg-red-50' : ''} ${getGradeColorClasses(grade.color)}`}
+                        onClick={() => grade.id && handleGradeSelect(grade.id)}
+                      >
+                        <div className="flex items-center gap-3 p-4 pb-2">
+                          <span className={`w-10 h-10 flex items-center justify-center rounded-full text-lg font-bold shadow ${getBadgeColorClasses(grade.color)}`}>{grade.name[0]}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-base font-semibold truncate max-w-[120px]">{grade.name}</span>
+                            <span className="text-xs text-gray-500 truncate max-w-[120px]">{grade.description || 'No description'}</span>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <div className="flex space-x-1">
+                        <div className="flex items-center justify-between px-4 pb-4 pt-2">
+                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getBadgeColorClasses(grade.color)}`} title="Student count">{grade.studentCount || 0} students</span>
+                          <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 grade.id && handleViewGrade(grade.id, grade.name);
                               }}
-                              className="p-1 text-gray-400 hover:text-gray-600"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 shadow focus:outline-none focus:ring-2 focus:ring-blue-300 transition"
                               title="View Students"
                               disabled={loadingViewGradeId === grade.id || !canManage}
                             >
-                              {loadingViewGradeId === grade.id ? (
-                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              ) : (
-                                <i className="fas fa-eye"></i>
-                              )}
+                              <i className="fas fa-eye"></i>
                             </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 grade.id && handleAddStudentsToGrade(grade.id, grade.name);
                               }}
-                              className="p-1 text-gray-400 hover:text-gray-600"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-green-50 hover:bg-green-100 text-green-600 hover:text-green-800 shadow focus:outline-none focus:ring-2 focus:ring-green-300 transition"
                               title="Add Students"
                               disabled={loadingAddStudentToGradeId === grade.id || !canManage}
                             >
-                              {loadingAddStudentToGradeId === grade.id ? (
-                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              ) : (
-                                <i className="fas fa-user-plus"></i>
-                              )}
+                              <i className="fas fa-user-plus"></i>
                             </button>
                             <button
                               onClick={async (e) => {
@@ -1294,22 +1302,93 @@ const ClassList: React.FC = () => {
                                   setDeletingGradeId(null);
                                 }
                               }}
-                              className={`p-1 text-gray-400 hover:text-red-600 ${deletingGradeId === grade.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 shadow focus:outline-none focus:ring-2 focus:ring-red-300 transition ${deletingGradeId === grade.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                               title={`Delete ${grade.name}`}
                               aria-label={`Delete ${grade.name}`}
                               disabled={deletingGradeId === grade.id}
                             >
-                              {deletingGradeId === grade.id ? (
-                                <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #e3342f', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              ) : (
-                                <i className="fas fa-trash"></i>
-                              )}
+                              <i className="fas fa-trash"></i>
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setLoadingEditGradeId(grade.id || null);
+                                try {
+                                  const { value: formValues } = await Swal.fire({
+                                    title: 'Edit Class Grade',
+                                    customClass: {
+                                      popup: 'rounded-xl shadow-2xl',
+                                      title: 'text-white text-xl font-semibold',
+                                      confirmButton: 'px-4 py-2 text-sm font-medium bg-blue-100 text-blue-700 rounded-lg shadow-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200',
+                                      cancelButton: 'px-4 py-2 text-sm font-medium bg-white text-gray-700 rounded-lg shadow-md hover:bg-gray-100 transition-all duration-200',
+                                    },
+                                    backdrop: 'rgba(0,0,0,0.6)',
+                                    background: '#fff',
+                                    showCloseButton: true,
+                                    html: `
+                                      <div class="text-left p-4 bg-white rounded-b-xl -mt-4">
+                                        <div class="mb-6">
+                                          <label class="block text-sm font-medium text-gray-700 mb-2">Grade Name</label>
+                                          <input id="edit-grade-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" value="${grade.name}" />
+                                        </div>
+                                        <div class="mb-6">
+                                          <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                                          <textarea id="edit-grade-description" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" rows="2">${grade.description || ''}</textarea>
+                                        </div>
+                                        <div class="mb-6">
+                                          <label class="block text-sm font-medium text-gray-700 mb-2">Color</label>
+                                          <select id="edit-grade-color" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                            <option value="blue" ${grade.color === 'blue' ? 'selected' : ''}>Blue</option>
+                                            <option value="green" ${grade.color === 'green' ? 'selected' : ''}>Green</option>
+                                            <option value="yellow" ${grade.color === 'yellow' ? 'selected' : ''}>Yellow</option>
+                                            <option value="purple" ${grade.color === 'purple' ? 'selected' : ''}>Purple</option>
+                                            <option value="red" ${grade.color === 'red' ? 'selected' : ''}>Red</option>
+                                            <option value="gray" ${grade.color === 'gray' ? 'selected' : ''}>Gray</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                    `,
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Save',
+                                    cancelButtonText: 'Cancel',
+                                    focusConfirm: false,
+                                    preConfirm: () => {
+                                      const name = (document.getElementById('edit-grade-name') as HTMLInputElement).value.trim();
+                                      const description = (document.getElementById('edit-grade-description') as HTMLTextAreaElement).value.trim();
+                                      const color = (document.getElementById('edit-grade-color') as HTMLSelectElement).value;
+                                      if (!name || !description || !color) {
+                                        Swal.showValidationMessage('Please fill in all required fields');
+                                        return false;
+                                      }
+                                      return { name, description, color };
+                                    }
+                                  });
+                                  if (formValues) {
+                                    await gradeService.updateGrade(grade.id!, {
+                                      name: formValues.name,
+                                      description: formValues.description,
+                                      color: formValues.color
+                                    });
+                                    showSuccess('Grade Updated', 'Class grade updated successfully.');
+                                    await loadGrades();
+                                  }
+                                } catch (error) {
+                                  showError('Failed to Edit', 'An error occurred while editing the class grade.');
+                                } finally {
+                                  setLoadingEditGradeId(null);
+                                }
+                              }}
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-yellow-50 hover:bg-yellow-100 text-yellow-600 hover:text-yellow-800 shadow focus:outline-none focus:ring-2 focus:ring-yellow-300 transition"
+                              title="Edit Grade"
+                              disabled={loadingEditGradeId === grade.id || !canManage}
+                            >
+                              <i className="fas fa-edit"></i>
                             </button>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -1416,108 +1495,114 @@ const ClassList: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredStudents.map((student) => (
-                        <tr key={student.id} className="hover:bg-blue-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-8 w-8">
-                                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <span className="text-blue-600 font-medium text-sm">
+                      {filteredStudents.map((student) => {
+                        // Find the grade object for this student
+                        const gradeObj = grades.find(g => g.name === student.grade);
+                        const badgeColor = gradeObj ? getBadgeColorClasses(gradeObj.color) : getBadgeColorClasses('blue');
+                        // Map badge color to a light hover background
+                        const hoverBgMap: Record<string, string> = {
+                          'bg-blue-100 text-blue-800': 'hover:bg-blue-50',
+                          'bg-green-100 text-green-800': 'hover:bg-green-50',
+                          'bg-yellow-100 text-yellow-800': 'hover:bg-yellow-50',
+                          'bg-purple-100 text-purple-800': 'hover:bg-purple-50',
+                          'bg-red-100 text-red-800': 'hover:bg-red-50',
+                          'bg-gray-100 text-gray-800': 'hover:bg-gray-50',
+                        };
+                        const hoverBg = hoverBgMap[badgeColor] || 'hover:bg-blue-50';
+                        return (
+                          <tr key={student.id} className={`transition-colors ${hoverBg}`}>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-8 w-8">
+                                  <div className={`h-8 w-8 rounded-full flex items-center justify-center ${badgeColor}`}>
+                                    <span className="font-medium text-sm">
+                                      {(() => {
+                                        const studentFullName = student.name || '';
+                                        let initial = '';
+                                        if (studentFullName.includes(' | ')) {
+                                          const parts = studentFullName.split(' | ');
+                                          if (parts[0]) initial = parts[0][0];
+                                        } else {
+                                          const parts = studentFullName.trim().split(' ');
+                                          if (parts.length > 0) initial = parts[parts.length - 1][0];
+                                        }
+                                        return initial.toUpperCase();
+                                      })()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="ml-3">
+                                  <div className="text-sm font-medium text-gray-900">
                                     {(() => {
                                       const studentFullName = student.name || '';
-                                      let initial = '';
-
                                       if (studentFullName.includes(' | ')) {
-                                          // New format: "Surname | Firstname"
-                                          const parts = studentFullName.split(' | ');
-                                          if (parts[0]) { // Surname part exists
-                                              initial = parts[0][0];
-                                          }
-                                      } else {
-                                          // Old format: could be "Firstname Surname" or just "Name"
-                                          const parts = studentFullName.trim().split(' ');
-                                          if (parts.length > 0) {
-                                              // Get the initial from the last part (assuming it's surname)
-                                              initial = parts[parts.length - 1][0];
-                                          }
+                                        return studentFullName.replace(' | ', ' ');
                                       }
-                                      return initial.toUpperCase();
+                                      return studentFullName;
                                     })()}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{student.grade}</div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                              <div className="flex items-center justify-center">
+                                {student.parentId ? (
+                                  <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                    Linked
                                   </span>
-                                </div>
-                              </div>
-                              <div className="ml-3">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {(() => {
-                                    const studentFullName = student.name || '';
-                                    // Remove the pipe and display as a single string
-                                    if (studentFullName.includes(' | ')) {
-                                      return studentFullName.replace(' | ', ' ');
-                                    }
-                                    return studentFullName;
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{student.grade}</div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center">
-                              {student.parentId ? (
-                                <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                                  Linked
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => student.id && handleLinkParent(student.id)}
-                                  className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                  <><i className="fas fa-link mr-1.5"></i>Link Parent</>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)}`}>
-                              {student.performance}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                onClick={() => student.id && handleViewProfile(student.id)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="View Profile"
-                                disabled={loadingStudentId === student.id || !canManage}
-                              >
-                                {loadingStudentId === student.id ? (
-                                  <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                                 ) : (
-                                  <i className="fas fa-eye"></i>
+                                  <button
+                                    onClick={() => student.id && handleLinkParent(student.id)}
+                                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                  >
+                                    <><i className="fas fa-link mr-1.5"></i>Link Parent</>
+                                  </button>
                                 )}
-                              </button>
-                              <button
-                                onClick={() => student.id && handleEditStudent(student.id)}
-                                className="text-indigo-600 hover:text-indigo-900"
-                                title="Edit Student"
-                                disabled={!canManage}
-                              >
-                                  <i className="fas fa-edit"></i>
-                              </button>
-                              <button
-                                onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
-                                className="text-red-600 hover:text-red-900"
-                                title="Delete Student"
-                                disabled={!canManage}
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)}`}>
+                                {student.performance}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => student.id && handleViewProfile(student.id)}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="View Profile"
+                                  disabled={loadingStudentId === student.id || !canManage}
+                                >
+                                  {loadingStudentId === student.id ? (
+                                    <span className="loader-spinner" style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #f3f3f3', borderTop: '2px solid #3498db', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                  ) : (
+                                    <i className="fas fa-eye"></i>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => student.id && handleEditStudent(student.id)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                  title="Edit Student"
+                                  disabled={!canManage}
+                                >
+                                    <i className="fas fa-edit"></i>
+                                </button>
+                                <button
+                                  onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Student"
+                                  disabled={!canManage}
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
