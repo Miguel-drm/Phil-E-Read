@@ -26,7 +26,7 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { signUp } = useAuth();
+  const { signUp, refreshUserProfile } = useAuth();
 
   const validateEmail = (email: string): boolean => {
     const domain = email.split('@')[1]?.toLowerCase();
@@ -57,6 +57,7 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
       setLoading(true);
       try {
         await signUp(email, password, name);
+        await refreshUserProfile();
         await Swal.fire({
           icon: 'success',
           title: 'Account Created Successfully!',
