@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, type ReactNode }
 import type { User } from 'firebase/auth';
 import { onAuthStateChange, signIn, signUp, signOutUser, resetPassword, getUserProfile, isProfileComplete } from '../services/authService';
 import type { UserProfile, UserRole } from '../services/authService';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -35,6 +36,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (user) => {
@@ -60,6 +62,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const handleSignIn = async (email: string, password: string) => {
+    // Clear all storage and state before login
+    localStorage.clear();
+    sessionStorage.clear();
+    setCurrentUser(null);
+    setUserProfile(null);
+    setUserRole(null);
     try {
       await signIn(email, password);
     } catch (error) {
@@ -78,8 +86,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleSignOut = async () => {
     try {
       await signOutUser();
-    } catch (error) {
-      throw error;
+    } finally {
+      // Clear all storage and state after logout
+      localStorage.clear();
+      sessionStorage.clear();
+      setCurrentUser(null);
+      setUserProfile(null);
+      setUserRole(null);
     }
   };
 

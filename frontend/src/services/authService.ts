@@ -6,7 +6,7 @@ import {
   updateProfile,
   onAuthStateChanged,
   type User,
-  type UserCredential
+  type UserCredential,
 } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';

@@ -83,7 +83,12 @@ const ParentDashboard: React.FC = () => {
       </div>
 
       {/* Progress Chart */}
-      <PerformanceChart data={mockChartData} />
+      <PerformanceChart 
+        data={mockChartData} 
+        grades={[]} 
+        students={children} 
+        isLoading={loading} 
+      />
 
       {/* Recent Activity */}
       <div className="bg-white p-6 rounded-lg shadow-sm">

@@ -21,7 +21,12 @@ const ProgressPage: React.FC = () => {
           <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">Filter</button>
         </div>
       </div>
-      <PerformanceChart data={mockChartData} />
+      <PerformanceChart 
+        data={mockChartData} 
+        grades={[]} 
+        students={[]} 
+        isLoading={false} 
+      />
     </div>
   );
 };

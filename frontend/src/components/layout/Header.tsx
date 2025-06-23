@@ -53,30 +53,13 @@ const Header: React.FC<HeaderProps> = ({
             >
               <span className="sr-only">Toggle menu</span>
               <span className="relative block h-6 w-6">
-                {/* Hamburger icon always on mobile, toggles on collapse for desktop/tablet */}
-                {isMobile ? (
-                  <svg
-                    className="h-6 w-6"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                ) : (
-                  <>
-                    <svg
-                      className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                    <svg
-                      className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </>
-                )}
+                {/* Always show hamburger icon */}
+                <svg
+                  className="h-6 w-6"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </span>
             </button>
             <h1 className="text-xl font-semibold text-gray-900 ml-4">{getPageTitle()}</h1>
