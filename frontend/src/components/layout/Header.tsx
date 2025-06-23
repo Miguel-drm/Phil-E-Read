@@ -6,12 +6,14 @@ interface HeaderProps {
   isMobile: boolean;
   onMenuToggle: () => void;
   isSidebarCollapsed?: boolean;
+  onShowSessionsModal?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   isMobile,
   onMenuToggle,
-  isSidebarCollapsed = false
+  isSidebarCollapsed = false,
+  onShowSessionsModal
 }) => {
   const { currentUser, userRole, signOut } = useAuth();
   const location = useLocation();
@@ -51,18 +53,30 @@ const Header: React.FC<HeaderProps> = ({
             >
               <span className="sr-only">Toggle menu</span>
               <span className="relative block h-6 w-6">
-                <svg
-                  className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                <svg
-                  className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                {/* Hamburger icon always on mobile, toggles on collapse for desktop/tablet */}
+                {isMobile ? (
+                  <svg
+                    className="h-6 w-6"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                ) : (
+                  <>
+                    <svg
+                      className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-100' : 'opacity-0'}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <svg
+                      className={`absolute inset-0 h-6 w-6 transition-opacity duration-200 ${isSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </>
+                )}
               </span>
             </button>
             <h1 className="text-xl font-semibold text-gray-900 ml-4">{getPageTitle()}</h1>
@@ -89,7 +103,16 @@ const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
-
+            {/* Upcoming Sessions Button for larger screens */}
+            {!isMobile && onShowSessionsModal && (
+              <button
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition-all duration-200 text-sm font-semibold"
+                onClick={onShowSessionsModal}
+              >
+                <i className="fas fa-calendar-alt mr-2"></i>
+                Upcoming Sessions
+              </button>
+            )}
             {/* Profile dropdown */}
             <div className="relative">
               <button
@@ -112,6 +135,16 @@ const Header: React.FC<HeaderProps> = ({
                     <div className="px-4 py-2 text-xs text-gray-500">
                       {userRole}
                     </div>
+                    {/* Upcoming Sessions in dropdown for mobile only */}
+                    {isMobile && onShowSessionsModal && (
+                      <button
+                        onClick={onShowSessionsModal}
+                        className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 focus:outline-none flex items-center gap-2"
+                      >
+                        <i className="fas fa-calendar-alt"></i>
+                        Upcoming Sessions
+                      </button>
+                    )}
                     <button
                       onClick={handleSignOut}
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none"
