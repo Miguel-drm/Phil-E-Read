@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { studentService, type Student } from '../../services/studentService';
 
 const Reports: React.FC = () => {
+  const { currentUser } = useAuth();
+  const [students, setStudents] = useState<Student[]>([]);
   const [selectedReport, setSelectedReport] = useState('overview');
   const [selectedPeriod, setSelectedPeriod] = useState('month');
 
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!currentUser?.uid) return;
+      try {
+        const fetchedStudents = await studentService.getStudents(currentUser.uid);
+        setStudents(fetchedStudents);
+      } catch (error) {
+        setStudents([]);
+      }
+    };
+    fetchStudents();
+  }, [currentUser?.uid]);
+
   const classStats = {
-    totalStudents: 24,
+    totalStudents: students.length,
     averageReadingLevel: 2.3,
     totalReadingSessions: 156,
     completedAssessments: 89,
@@ -135,17 +152,6 @@ const Reports: React.FC = () => {
             Student Performance
           </button>
           <button
-            onClick={() => setSelectedReport('attendance')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selectedReport === 'attendance'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <i className="fas fa-calendar-check mr-2"></i>
-            Attendance
-          </button>
-          <button
             onClick={() => setSelectedReport('assessments')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               selectedReport === 'assessments'
@@ -265,71 +271,59 @@ const Reports: React.FC = () => {
           </div>
           
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Student
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Reading Level
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Progress
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assessments
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Avg Score
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Trend
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {studentPerformance.map((student) => (
-                  <tr key={student.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                          {student.name.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        {student.readingLevel}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${student.progress}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm text-gray-900">{student.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.assessments}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.avgScore}%
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getTrendIcon(student.trend)}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Student
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Reading Level
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Progress
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Assessments
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Avg Score
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Trend
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {students.map((student) => (
+                    <tr key={student.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                          {student.name.replace(/\|/g, ' ').trim().charAt(0).toUpperCase()}
+                        </span>
+                        {student.name.replace(/\|/g, ' ')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {student.readingLevel || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        -
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        -
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        -
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        -
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
