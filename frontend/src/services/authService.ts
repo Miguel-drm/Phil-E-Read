@@ -38,6 +38,7 @@ export interface UserProfile {
   languagesSpoken?: string;
   notes?: string;
   isProfileComplete?: boolean;
+  bio?: string;
 }
 
 // Function to determine user role based on email domain

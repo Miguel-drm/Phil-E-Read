@@ -71,7 +71,7 @@ const App: React.FC = () => {
                     <Route path="class-list" element={<ClassList />} />
                     <Route path="make-test" element={<MakeTest />} />
                     <Route path="reports" element={<Reports />} />
-                    <Route path="profile" element={<Profile />} />
+                    <Route path="profile/*" element={<Profile />} />
                     <Route path="reading-session/:sessionId" element={<ReadingSessionPage />} />
                   </Routes>
                 </DashboardLayout>
