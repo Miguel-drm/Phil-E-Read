@@ -6,7 +6,7 @@ import {
   updateProfile,
   onAuthStateChanged,
   type User,
-  type UserCredential
+  type UserCredential,
 } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -41,6 +41,10 @@ export interface UserProfile {
 }
 
 // Function to determine user role based on email domain
+// This is a simple and automatic role assignment:
+// - Emails ending with @admin.com become 'admin'
+// - Emails ending with @teacher.edu.ph become 'teacher'
+// - All others become 'parent'
 const determineUserRole = (email: string): UserRole => {
   const domain = email.split('@')[1]?.toLowerCase();
   
@@ -54,6 +58,7 @@ const determineUserRole = (email: string): UserRole => {
 };
 
 // Sign up with email and password
+// This will always set the user role in Firestore based on the email domain
 export const signUp = async (email: string, password: string, displayName?: string): Promise<UserCredential> => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -67,11 +72,11 @@ export const signUp = async (email: string, password: string, displayName?: stri
 
     // Create user document in Firestore with role determined by email
     if (userCredential.user) {
-      const role = determineUserRole(email);
+      const role = determineUserRole(email); // <-- Role is determined here
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: email,
         displayName: displayName || '',
-        role: role,
+        role: role, // <-- Role is written to Firestore
         createdAt: new Date().toISOString()
       });
     }

@@ -4,10 +4,9 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import UpcomingSessions from '../dashboard/teacher/UpcomingSessions';
+import { Outlet } from 'react-router-dom';
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+interface DashboardLayoutProps {}
 
 const sessionsData = [
   {
@@ -57,7 +56,7 @@ const sessionsData = [
   }
 ];
 
-const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+const DashboardLayout: React.FC<DashboardLayoutProps> = () => {
   const { currentUser, userRole } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -160,7 +159,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         {/* Content Container */}
         <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 w-full min-w-0 pt-2 sm:pt-[var(--header-height,56px)] md:pt-0">
           <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6 lg:py-8 pb-[env(safe-area-inset-bottom)]">
-            {children}
+            <Outlet />
           </div>
         </main>
         {/* Upcoming Sessions Modal (global) */}
