@@ -92,7 +92,7 @@ const StorySchema: Schema = new Schema({
   }
 });
 
-// Add text index for search functionality
+// Add text index for search functionalityy
 StorySchema.index({ title: 'text', description: 'text', textContent: 'text' });
 
 export default mongoose.model<IStory>('Story', StorySchema);
