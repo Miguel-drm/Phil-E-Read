@@ -29,10 +29,13 @@ import AssignmentsPage from './pages/parent/Assignments';
 import ReportsPage from './pages/parent/Reports';
 import ParentProfilePage from './pages/parent/Profile';
 
+import SyncTeacherProfile from './components/SyncTeacherProfile';
+
 const App: React.FC = () => {
   return (
     <Router>
       <AuthProvider>
+        <SyncTeacherProfile />
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<AuthWrapper />} />

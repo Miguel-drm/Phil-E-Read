@@ -9,6 +9,7 @@ import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
 import GridFSService from './services/gridfsService.js';
+import teacherRoutes from './routes/teacherRoutes.js';
 
 dotenv.config();
 
@@ -136,60 +137,47 @@ app.use(express.json());
       }
     });
 
-    app.get('/api/test-pdf/:id', async (req: Request, res: Response) => {
-      try {
-        console.log('Test PDF endpoint called for story ID:', req.params.id);
-        
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-          res.status(400).json({ error: 'Invalid story ID format' });
-          return;
-        }
-
-        const story = await Story.findById(req.params.id).lean();
-        if (!story) {
-          res.status(404).json({ error: 'Story not found' });
-          return;
-        }
-
-        console.log('Story found for test:', {
-          id: story._id,
-          title: story.title,
-          hasPdfFileId: !!story.pdfFileId,
-          hasPdfData: !!story.pdfData
-        });
-
-        if (story.pdfFileId) {
-          try {
-            const { buffer } = await mongoStoryService.getPDFContent(story._id.toString());
-            
-            // Ensure we have a proper Node.js Buffer
-            const pdfBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
-            
-            // Return debug info instead of the PDF
-            res.json({
-              success: true,
-              bufferSize: pdfBuffer.length,
-              bufferType: typeof pdfBuffer,
-              isBuffer: Buffer.isBuffer(pdfBuffer),
-              first20BytesHex: pdfBuffer.slice(0, 20).toString('hex'),
-              first10Chars: pdfBuffer.slice(0, 10).toString(),
-              pdfHeader: pdfBuffer.slice(0, 4).toString(),
-              hasValidHeader: pdfBuffer.slice(0, 4).toString().startsWith('%PDF')
-            });
-          } catch (err) {
-            res.status(500).json({ 
-              error: 'Failed to get PDF content',
-              details: err instanceof Error ? err.message : 'Unknown error'
-            });
-          }
-        } else {
-          res.status(404).json({ error: 'No PDF file ID found' });
-        }
-      } catch (error) {
-        console.error('Test PDF endpoint error:', error);
-        res.status(500).json({ error: 'Test failed' });
-      }
-    });
+    // Commenting out the /api/test-pdf/:id endpoint to avoid missing PDF file error
+    // app.get('/api/test-pdf/:id', async (req: Request, res: Response) => {
+    //   try {
+    //     console.log('Test PDF endpoint called for story ID:', req.params.id);
+    //     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    //       res.status(400).json({ error: 'Invalid story ID format' });
+    //       return;
+    //     }
+    //     const story = await Story.findById(req.params.id).lean();
+    //     if (!story) {
+    //       res.status(404).json({ error: 'Story not found' });
+    //       return;
+    //     }
+    //     if (story.pdfFileId) {
+    //       try {
+    //         const { buffer } = await mongoStoryService.getPDFContent(story._id.toString());
+    //         const pdfBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+    //         res.json({
+    //           success: true,
+    //           bufferSize: pdfBuffer.length,
+    //           bufferType: typeof pdfBuffer,
+    //           isBuffer: Buffer.isBuffer(pdfBuffer),
+    //           first20BytesHex: pdfBuffer.slice(0, 20).toString('hex'),
+    //           first10Chars: pdfBuffer.slice(0, 10).toString(),
+    //           pdfHeader: pdfBuffer.slice(0, 4).toString(),
+    //           hasValidHeader: pdfBuffer.slice(0, 4).toString().startsWith('%PDF')
+    //         });
+    //       } catch (err) {
+    //         res.status(500).json({ 
+    //           error: 'Failed to get PDF content',
+    //           details: err instanceof Error ? err.message : 'Unknown error'
+    //         });
+    //       }
+    //     } else {
+    //       res.status(404).json({ error: 'No PDF file ID found' });
+    //     }
+    //   } catch (error) {
+    //     console.error('Test PDF endpoint error:', error);
+    //     res.status(500).json({ error: 'Test failed' });
+    //   }
+    // });
 
     app.get('/api/stories/:id/pdf', async (req: Request, res: Response) => {
       try {
@@ -473,6 +461,8 @@ app.use(express.json());
         return;
       }
     });
+
+    app.use('/api/teachers', teacherRoutes);
 
   } catch (error) {
     console.error('Failed to connect to MongoDB or initialize GridFS:', error);

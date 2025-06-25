@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { updateUserProfile } from '../../services/authService';
 import { showSuccess, showError } from '../../services/alertService';
+import Cropper from 'react-easy-crop';
 
 const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80';
 
@@ -10,49 +10,163 @@ interface EditProfileModalProps {
   onClose: () => void;
 }
 
+// Helper to get cropped image as blob
+async function getCroppedImg(imageSrc: string, crop: any) {
+  const createImage = (url: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+      image.addEventListener('load', () => resolve(image));
+      image.addEventListener('error', error => reject(error));
+      image.setAttribute('crossOrigin', 'anonymous');
+      image.src = url;
+    });
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+  ctx.drawImage(
+    image,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    crop.width,
+    crop.height
+  );
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas is empty'));
+    }, 'image/png');
+  });
+}
+
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
-  const { userProfile, refreshUserProfile } = useAuth();
-  const [editAvatar, setEditAvatar] = useState<string | undefined>(userProfile?.photoURL);
+  const { userProfile, currentUser } = useAuth();
+  const firebaseUid = currentUser?.uid;
+  const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const [editBanner, setEditBanner] = useState<string>(bannerUrl);
   const [editBio, setEditBio] = useState(userProfile?.bio || '');
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Cropper modal state
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+
+  // Fetch current profile image from backend when modal opens
+  useEffect(() => {
+    if (!isOpen || !firebaseUid) return;
+    async function fetchProfileImage() {
+      try {
+        const res = await fetch(`/api/teachers/${firebaseUid}/profile-image`);
+        const data = await res.json();
+        if (data && data.profileImage) {
+          setEditAvatar(`data:image/png;base64,${data.profileImage}`);
+        } else {
+          setEditAvatar(undefined);
+        }
+      } catch {
+        setEditAvatar(undefined);
+      }
+    }
+    fetchProfileImage();
+  }, [isOpen, firebaseUid]);
 
   if (!isOpen) return null;
 
   const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setAvatarFile(file);
-      setEditAvatar(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImageToCrop(reader.result as string);
+        setShowCropModal(true);
+      };
+      reader.readAsDataURL(file);
     }
   };
+
+  // When crop is confirmed
+  const handleCropConfirm = useCallback(async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+    try {
+      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      const croppedUrl = URL.createObjectURL(croppedBlob);
+      setEditAvatar(croppedUrl);
+      setAvatarFile(new File([croppedBlob], 'avatar.png', { type: 'image/png' }));
+      setShowCropModal(false);
+    } catch (err) {
+      showError('Crop failed', (err as Error).message);
+    }
+  }, [imageToCrop, croppedAreaPixels]);
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
+  };
+
+  const onCropComplete = useCallback((_: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
   const handleEditBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setBannerFile(file);
       setEditBanner(URL.createObjectURL(file));
     }
   };
   const handleResetBanner = () => {
-    setBannerFile(null);
     setEditBanner(bannerUrl);
   };
   const handleEditCancel = () => {
     onClose();
-    setEditAvatar(userProfile?.photoURL);
+    setEditAvatar(undefined);
     setEditBanner(bannerUrl);
     setEditBio(userProfile?.bio || '');
-    setBannerFile(null);
     setAvatarFile(null);
   };
   const handleEditSave = async () => {
     setSavingEdit(true);
     try {
-      // TODO: Upload avatarFile and bannerFile if present, update Firestore with new URLs and bio
-      // For now, just close modal
+      // 1. Upload avatar image if changed
+      if (avatarFile && firebaseUid) {
+        // Ensure teacher document exists (sync)
+        await fetch('/api/teachers/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firebaseUid,
+            name: userProfile?.displayName || 'Teacher',
+            email: userProfile?.email || ''
+          })
+        });
+        // Upload image
+        const formData = new FormData();
+        formData.append('image', avatarFile);
+        const response = await fetch(`/api/teachers/${firebaseUid}/profile-image`, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await response.json();
+        if (!data.success) {
+          showError('Upload failed', data.error || 'Unknown error');
+          setSavingEdit(false);
+          return;
+        }
+      }
+      // Optionally: handle banner and bio update here if needed
+      showSuccess('Profile Updated', 'Your profile image has been updated!');
       onClose();
+    } catch (err: any) {
+      showError('Upload failed', err.message);
     } finally {
       setSavingEdit(false);
     }
@@ -96,6 +210,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
                   </svg>
                 </div>
               )}
+              {/* Camera icon at bottom-right */}
               <label className="absolute bottom-0 right-0 bg-gray-100 rounded-full p-2 shadow border border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors" title="Change profile photo">
                 <input type="file" accept="image/*" className="hidden" onChange={handleEditAvatarChange} />
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-700">
@@ -106,6 +221,29 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
             </div>
             <span className="text-sm text-gray-500">Change Profile Picture</span>
           </div>
+          {/* Cropper Modal */}
+          {showCropModal && (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60">
+              <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-4xl relative flex flex-col items-center">
+                <h3 className="text-lg font-semibold mb-4">Crop Image</h3>
+                <div className="relative w-[600px] h-[600px] bg-gray-100">
+                  <Cropper
+                    image={imageToCrop!}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={onCropComplete}
+                  />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300" onClick={handleCropCancel}>Cancel</button>
+                  <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={handleCropConfirm}>Crop</button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Banner */}
           <div className="mb-6">
             <div className="relative w-full h-24 rounded-xl overflow-hidden mb-2">

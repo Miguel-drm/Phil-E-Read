@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 
@@ -19,6 +19,26 @@ const Header: React.FC<HeaderProps> = ({
   const location = useLocation();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // Add state and effect for teacher profile image
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  useEffect(() => {
+    async function fetchProfileImage() {
+      if (!currentUser?.uid) return;
+      try {
+        const res = await fetch(`/api/teachers/${currentUser.uid}/profile-image`);
+        const data = await res.json();
+        if (data && data.profileImage) {
+          setProfileImage(`data:image/png;base64,${data.profileImage}`);
+        } else {
+          setProfileImage(null);
+        }
+      } catch {
+        setProfileImage(null);
+      }
+    }
+    fetchProfileImage();
+  }, [currentUser]);
 
   const getPageTitle = () => {
     const pathParts = location.pathname.split('/');
@@ -120,13 +140,29 @@ const Header: React.FC<HeaderProps> = ({
                 className="flex items-center space-x-3 focus:outline-none"
               >
                 {/* Avatar with overlapping chevron dropdown icon */}
-                <div className="relative h-8 w-8">
-                  <div className="h-9 w-9 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                    {currentUser?.displayName?.[0] || currentUser?.email?.[0] || 'U'}
+                <div className="relative h-12 w-12">
+                  <div className="h-12 w-12 rounded-full bg-white border border-gray-300 flex items-center justify-center text-white">
+                    {profileImage ? (
+                      <img
+                        src={profileImage}
+                        alt="Profile"
+                        className="object-cover w-full h-full rounded-full"
+                      />
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-8 h-8"
+                        viewBox="0 0 24 24"
+                        fill="#cfd8dc"
+                      >
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M4 20c0-2.21 3.58-4 8-4s8 1.79 8 4v1H4v-1z" />
+                      </svg>
+                    )}
                   </div>
                   {/* Chevron dropdown icon, overlapping bottom-right */}
-                  <span className="absolute -bottom-1 -right-2 bg-gray-100 rounded-full flex items-center justify-center shadow border border-gray-200" style={{ width: '1rem', height: '1rem' }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="#111" className="w-4 h-4">
+                  <span className="absolute -bottom-0 -right-0 translate-x-1/4 translate-y-1/4 bg-gray-100 rounded-full flex items-center justify-center shadow border border-gray-200" style={{ width: '1.25rem', height: '1.25rem' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="#111" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </span>
