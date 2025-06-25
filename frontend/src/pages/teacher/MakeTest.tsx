@@ -4,8 +4,16 @@ const MakeTest: React.FC = () => {
   const [activeTab, setActiveTab] = useState('create');
   const [selectedTestType, setSelectedTestType] = useState('comprehension');
   const [selectedLevel, setSelectedLevel] = useState('level2');
-
-  const testTemplates = [
+  const [testName, setTestName] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [questions, setQuestions] = useState([
+    {
+      question: '',
+      choices: ['', '', ''],
+      correctAnswer: 0,
+    },
+  ]);
+  const [testTemplates, setTestTemplates] = useState([
     {
       id: 1,
       name: 'Reading Comprehension - Level 2',
@@ -33,7 +41,7 @@ const MakeTest: React.FC = () => {
       duration: '20 min',
       lastUsed: '2024-01-12'
     }
-  ];
+  ]);
 
   const recentTests = [
     {
@@ -66,9 +74,24 @@ const MakeTest: React.FC = () => {
   ];
 
   const handleCreateTest = async () => {
-    // Remove all imports and usages of showSuccess, showConfirmation, showInfo, showError, and any SweetAlert-related logic.
-    // Remove confirmation logic and let the code continue or return as needed.
-    // Remove any code that references SweetAlert or the custom alert service.
+    const newTest = {
+      id: Date.now(),
+      name: testName,
+      type: selectedTestType,
+      level: selectedLevel,
+      questions: questions.length,
+      duration: '', // You can add duration logic if needed
+      lastUsed: new Date().toISOString().split('T')[0],
+      testName,
+      instructions,
+      questions,
+    };
+    setTestTemplates([newTest, ...testTemplates]);
+    setActiveTab('templates'); // Switch to templates tab after creation
+    // Optionally reset form fields
+    setTestName('');
+    setInstructions('');
+    setQuestions([{ question: '', choices: ['', '', ''], correctAnswer: 0 }]);
   };
 
   const handleUseTemplate = async (templateId: number) => {
@@ -119,6 +142,40 @@ const MakeTest: React.FC = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handleQuestionChange = (idx: number, value: string) => {
+    const updated = [...questions];
+    updated[idx].question = value;
+    setQuestions(updated);
+  };
+  const handleChoiceChange = (qIdx: number, cIdx: number, value: string) => {
+    const updated = [...questions];
+    updated[qIdx].choices[cIdx] = value;
+    setQuestions(updated);
+  };
+  const handleAddChoice = (qIdx: number) => {
+    const updated = [...questions];
+    updated[qIdx].choices.push('');
+    setQuestions(updated);
+  };
+  const handleRemoveChoice = (qIdx: number, cIdx: number) => {
+    const updated = [...questions];
+    updated[qIdx].choices.splice(cIdx, 1);
+    setQuestions(updated);
+  };
+  const handleAddQuestion = () => {
+    setQuestions([...questions, { question: '', choices: ['', '', ''], correctAnswer: 0 }]);
+  };
+  const handleRemoveQuestion = (idx: number) => {
+    const updated = [...questions];
+    updated.splice(idx, 1);
+    setQuestions(updated);
+  };
+  const handleCorrectAnswer = (qIdx: number, cIdx: number) => {
+    const updated = [...questions];
+    updated[qIdx].correctAnswer = cIdx;
+    setQuestions(updated);
   };
 
   return (
@@ -180,71 +237,97 @@ const MakeTest: React.FC = () => {
       {activeTab === 'create' && (
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Assessment</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Test Type
-                </label>
-                <select
-                  value={selectedTestType}
-                  onChange={(e) => setSelectedTestType(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="comprehension">Reading Comprehension</option>
-                  <option value="vocabulary">Vocabulary Assessment</option>
-                  <option value="fluency">Fluency Test</option>
-                  <option value="phonics">Phonics Assessment</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reading Level
-                </label>
-                <select
-                  value={selectedLevel}
-                  onChange={(e) => setSelectedLevel(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="level1">Independent</option>
-                  <option value="level2">Instructional</option>
-                  <option value="level3">Frustrational</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Test Name
-              </label>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Multiple Choice Test</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Test Name</label>
               <input
                 type="text"
-                placeholder="Enter test name..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={testName}
+                onChange={e => setTestName(e.target.value)}
+                placeholder="Enter test name..."
               />
             </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Instructions
-              </label>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Instructions</label>
               <textarea
-                rows={4}
-                placeholder="Enter test instructions..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              ></textarea>
+                value={instructions}
+                onChange={e => setInstructions(e.target.value)}
+                placeholder="Enter test instructions..."
+              />
             </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={handleCreateTest}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
-              >
-                Create Test
+            <div className="space-y-8">
+              {questions.map((q, qIdx) => (
+                <div key={qIdx} className="border rounded-lg p-4 bg-gray-50">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Question {qIdx + 1}</label>
+                    {questions.length > 1 && (
+                      <button type="button" className="text-red-500 text-xs" onClick={() => handleRemoveQuestion(qIdx)}>
+                        Remove Question
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={q.question}
+                    onChange={e => handleQuestionChange(qIdx, e.target.value)}
+                    placeholder={`Enter question ${qIdx + 1}...`}
+                  />
+                  <div className="space-y-2">
+                    {q.choices.map((choice, cIdx) => (
+                      <div
+                        key={cIdx}
+                        className={`flex items-center gap-2 rounded-md px-2 py-1 relative group ${q.correctAnswer === cIdx ? 'bg-green-50 border-l-4 border-green-400' : ''}`}
+                        style={{ transition: 'background 0.2s' }}
+                      >
+                        <input
+                          type="radio"
+                          name={`correct-${qIdx}`}
+                          checked={q.correctAnswer === cIdx}
+                          onChange={() => handleCorrectAnswer(qIdx, cIdx)}
+                          className="accent-blue-600"
+                        />
+                        {q.correctAnswer === cIdx ? (
+                          <span className="flex items-center text-green-600 font-semibold text-xs ml-1">
+                            <i className="fas fa-check-circle mr-1"></i> Correct Answer
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400 ml-1 opacity-0 group-hover:opacity-100 cursor-pointer" onClick={() => handleCorrectAnswer(qIdx, cIdx)}>
+                            Mark as correct
+                          </span>
+                        )}
+                        <input
+                          type="text"
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          value={choice}
+                          onChange={e => handleChoiceChange(qIdx, cIdx, e.target.value)}
+                          placeholder={`Choice ${String.fromCharCode(97 + cIdx)}`}
+                        />
+                        {q.choices.length > 2 && (
+                          <button type="button" className="text-red-500 text-xs" onClick={() => handleRemoveChoice(qIdx, cIdx)}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button type="button" className="text-blue-600 text-xs mt-2" onClick={() => handleAddChoice(qIdx)}>
+                      + Add Choice
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="text-blue-600 text-sm" onClick={handleAddQuestion}>
+                + Add Question
               </button>
             </div>
+            <button
+              className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+              onClick={handleCreateTest}
+            >
+              Create Test
+            </button>
           </div>
         </div>
       )}
@@ -268,7 +351,7 @@ const MakeTest: React.FC = () => {
                           {template.level}
                         </span>
                       </div>
-                      <p><i className="fas fa-question-circle mr-2"></i>{template.questions} questions</p>
+                      <p><i className="fas fa-question-circle mr-2"></i>{Array.isArray(template.questions) ? template.questions.length : template.questions} questions</p>
                       <p><i className="fas fa-clock mr-2"></i>Duration: {template.duration}</p>
                       <p><i className="fas fa-calendar mr-2"></i>Last used: {template.lastUsed}</p>
                     </div>

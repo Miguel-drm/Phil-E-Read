@@ -102,10 +102,19 @@ const Header: React.FC<HeaderProps> = ({
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="flex items-center space-x-3 focus:outline-none"
               >
-                <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
-                  {currentUser?.displayName?.[0] || currentUser?.email?.[0] || 'U'}
+                {/* Avatar with overlapping chevron dropdown icon */}
+                <div className="relative h-8 w-8">
+                  <div className="h-9 w-9 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                    {currentUser?.displayName?.[0] || currentUser?.email?.[0] || 'U'}
+                  </div>
+                  {/* Chevron dropdown icon, overlapping bottom-right */}
+                  <span className="absolute -bottom-1 -right-2 bg-gray-100 rounded-full flex items-center justify-center shadow border border-gray-200" style={{ width: '1rem', height: '1rem' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="#111" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
                 </div>
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-gray-700 ml-2">
                   {currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}
                 </span>
               </button>

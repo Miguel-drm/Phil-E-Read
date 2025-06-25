@@ -49,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
 
   const isActive = (path: string) => {
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   const getNavItems = () => {

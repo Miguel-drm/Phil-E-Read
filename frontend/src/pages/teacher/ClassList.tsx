@@ -177,8 +177,8 @@ const ClassList: React.FC = () => {
             const name = (row.Name || row.name || '').trim();
             const surname = (row.Surname || row.surname || '').trim();
             
-            // Combine name and surname with ' | ' separator
-            const fullName = [surname, name].filter(Boolean).join(' | ');
+            // Combine name and surname with ' ' separator
+            const fullName = [surname, name].filter(Boolean).join(' ');
 
             return {
               name: fullName,
@@ -309,7 +309,7 @@ const ClassList: React.FC = () => {
             <div class="mb-6">
               <div class="text-lg font-bold text-gray-900 mb-2">Student Details</div>
               <div class="space-y-2">
-                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name.replace(' | ', ' ')}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-700">Name</span><span class="text-gray-900">${student.name.replace(/\|/g, ' ')}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Grade</span><span class="text-gray-900">${student.grade}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Reading Level</span><span class="text-gray-900">${student.readingLevel}</span></div>
                 <div class="flex justify-between"><span class="font-semibold text-gray-700">Performance</span><span class="text-gray-900">${student.performance}</span></div>
@@ -607,21 +607,16 @@ const ClassList: React.FC = () => {
 
   // Handle grade selection
   const handleGradeSelect = async (gradeId: string) => {
-    if (selectedGrade === gradeId) {
-      // Do nothing if the same class is clicked
-      return;
-    }
     setSelectedGrade(gradeId);
     try {
-      // Get students in the grade's subcollection
       const studentsInGrade = await gradeService.getStudentsInGrade(gradeId);
       const studentIds = studentsInGrade.map(s => s.studentId);
-      // Only show students in the main collection that are also in the grade's subcollection
       const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
+      // Sort students by name A-Z
+      gradeStudents.sort((a, b) => a.name.localeCompare(b.name));
       setFilteredStudents(gradeStudents);
     } catch (error) {
-      console.error('Error loading students for grade:', error);
-      showError('Error', 'Failed to load students for this grade');
+      setFilteredStudents([]);
     }
   };
 
@@ -670,7 +665,7 @@ const ClassList: React.FC = () => {
                     <tbody class="bg-white divide-y divide-gray-100">
                       ${validStudentsInGrade.map(student => `
                         <tr class="hover:bg-blue-50 transition-colors duration-150">
-                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name.replace(' | ', ' ')}</td>
+                          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${student.name.replace(/\|/g, ' ')}</td>
                           <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onclick="window.removeStudent('${student.studentId}')"
@@ -926,6 +921,8 @@ const ClassList: React.FC = () => {
           const studentsInGrade = await gradeService.getStudentsInGrade(firstGradeId);
           const studentIds = studentsInGrade.map(s => s.studentId);
           const gradeStudents = students.filter(student => student.id && studentIds.includes(student.id));
+          // Sort students by name A-Z
+          gradeStudents.sort((a, b) => a.name.localeCompare(b.name));
           setFilteredStudents(gradeStudents);
         } catch (error) {
           setFilteredStudents([]);
@@ -1256,19 +1253,20 @@ const ClassList: React.FC = () => {
                     grades.map((grade) => (
                       <div
                         key={grade.id}
-                        className={`flex flex-col justify-between w-full max-w-full rounded-xl shadow-md border-2 cursor-pointer transition-all duration-200 bg-white/90 hover:shadow-lg ${selectedGrade === grade.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-blue-100'} ${selectedGrades.includes(grade.id || '') ? 'bg-red-50' : ''} ${getGradeColorClasses(grade.color)}`}
+                        className={`flex flex-col w-full max-w-full rounded-xl shadow-md border-2 cursor-pointer transition-all duration-200 bg-white/90 hover:shadow-lg ${selectedGrade === grade.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-blue-100'} ${selectedGrades.includes(grade.id || '') ? 'bg-red-50' : ''} ${getGradeColorClasses(grade.color)}`}
+                        style={{ minWidth: 0 }}
                         onClick={() => grade.id && handleGradeSelect(grade.id)}
                       >
-                        <div className="flex items-center gap-3 p-4 pb-2">
+                        <div className="flex items-center gap-3 p-4 pb-2 min-w-0">
                           <span className={`w-10 h-10 flex items-center justify-center rounded-full text-lg font-bold shadow ${getBadgeColorClasses(grade.color)}`}>{grade.name[0]}</span>
                           <div className="flex flex-col min-w-0">
                             <span className="text-base font-semibold truncate max-w-[120px]">{grade.name}</span>
                             <span className="text-xs text-gray-500 truncate max-w-[120px]">{grade.description || 'No description'}</span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between px-4 pb-4 pt-2">
+                        <div className="flex items-center justify-between px-4 pb-4 pt-2 min-w-0">
                           <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getBadgeColorClasses(grade.color)}`} title="Student count">{grade.studentCount || 0} students</span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-row flex-nowrap items-center gap-2 min-w-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1519,8 +1517,8 @@ const ClassList: React.FC = () => {
                                       {(() => {
                                         const studentFullName = student.name || '';
                                         let initial = '';
-                                        if (studentFullName.includes(' | ')) {
-                                          const parts = studentFullName.split(' | ');
+                                        if (studentFullName.includes(' ')) {
+                                          const parts = studentFullName.split(' ');
                                           if (parts[0]) initial = parts[0][0];
                                         } else {
                                           const parts = studentFullName.trim().split(' ');
@@ -1535,8 +1533,8 @@ const ClassList: React.FC = () => {
                                   <div className="text-sm font-medium text-gray-900">
                                     {(() => {
                                       const studentFullName = student.name || '';
-                                      if (studentFullName.includes(' | ')) {
-                                        return studentFullName.replace(' | ', ' ');
+                                      if (studentFullName.includes(' ')) {
+                                        return studentFullName.replace(/\|/g, ' ');
                                       }
                                       return studentFullName;
                                     })()}
@@ -1656,7 +1654,7 @@ const ClassList: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {importedStudents.map((student, index) => (
                     <tr key={index} className="hover:bg-blue-50 transition-colors duration-150">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name.replace(' | ', ' ')}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.name.replace(/\|/g, ' ')}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.grade}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{student.readingLevel}</td>
                     </tr>
