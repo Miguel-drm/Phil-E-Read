@@ -84,7 +84,6 @@ const MakeTest: React.FC = () => {
       lastUsed: new Date().toISOString().split('T')[0],
       testName,
       instructions,
-      questions,
     };
     setTestTemplates([newTest, ...testTemplates]);
     setActiveTab('templates'); // Switch to templates tab after creation
