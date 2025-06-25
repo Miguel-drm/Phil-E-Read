@@ -118,9 +118,6 @@ const App: React.FC = () => {
   return (
     <Router>
       <AuthProvider>
-<<<<<<< HEAD
-        <AuthGate />
-=======
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<AuthWrapper />} />
@@ -193,7 +190,6 @@ const App: React.FC = () => {
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
->>>>>>> Jbranch
       </AuthProvider>
     </Router>
   );

@@ -473,7 +473,7 @@ const ReadingSessionPage: React.FC = () => {
                 <span>{paragraphs.length} paragraphs</span>
               </div>
             </div>
-            <div className="relative">
+            <div className="relative px-4 sm:px-6 md:px-8">
               <div className="max-h-96 overflow-y-auto pr-4 custom-scrollbar">
                 <div className="prose prose-lg max-w-none">
                   <div className="space-y-6">
@@ -533,7 +533,7 @@ const ReadingSessionPage: React.FC = () => {
                 <span>{words.length} words</span>
               </div>
             </div>
-            <div className="relative">
+            <div className="relative px-4 sm:px-6 md:px-8">
               <div className="max-h-96 overflow-y-auto pr-4 custom-scrollbar">
                 <div className="prose prose-lg max-w-none">
                   <div className="space-y-6">

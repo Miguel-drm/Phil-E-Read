@@ -10,6 +10,7 @@ import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Routes, Route } from 'react-router-dom';
 import ProfileOverview from './ProfileOverview';
+import Cropper from 'react-easy-crop';
 
 const Profile: React.FC = () => {
   const { currentUser, userProfile, refreshUserProfile, signOut } = useAuth();
@@ -19,6 +20,12 @@ const Profile: React.FC = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
 
   const [profileData, setProfileData] = useState({
     displayName: '',
@@ -208,10 +215,64 @@ const Profile: React.FC = () => {
     }
   };
 
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+      setSelectedFile(file);
+      setShowCropper(true);
+    } else {
+      showError('Invalid file', 'Please select a JPG or PNG image.');
+    }
+  };
+
+  // Get cropped image as base64
+  const getCroppedImg = async (imageSrc: string, cropPixels: any) => {
+    const image = new window.Image();
+    image.src = imageSrc;
+    await new Promise((resolve) => { image.onload = resolve; });
+    const canvas = document.createElement('canvas');
+    canvas.width = cropPixels.width;
+    canvas.height = cropPixels.height;
+    const ctx = canvas.getContext('2d');
+    ctx?.drawImage(
+      image,
+      cropPixels.x,
+      cropPixels.y,
+      cropPixels.width,
+      cropPixels.height,
+      0,
+      0,
+      cropPixels.width,
+      cropPixels.height
+    );
+    return canvas.toDataURL('image/jpeg');
+  };
+
+  // When cropping is done
+  const handleCropComplete = async (_croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const handleCropSave = async () => {
+    if (selectedFile && croppedAreaPixels) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const imageDataUrl = e.target?.result as string;
+        const croppedImg = await getCroppedImg(imageDataUrl, croppedAreaPixels);
+        setProfileImage(croppedImg);
+        setShowCropper(false);
+      };
+      reader.readAsDataURL(selectedFile);
+    }
+  };
+
   return (
-    <Routes>
-      <Route index element={<ProfileOverview />} />
-    </Routes>
+    <div className="profile-page px-4 sm:px-6 md:px-8">
+      <Routes>
+        <Route index element={<ProfileOverview />} />
+      </Routes>
+    </div>
   );
 };
 

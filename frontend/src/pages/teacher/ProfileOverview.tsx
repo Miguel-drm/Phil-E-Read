@@ -251,7 +251,7 @@ const ProfileOverview: React.FC = () => {
         />
       </div>
       {/* Profile Header Row: Avatar, Name, Actions */}
-      <div className="relative max-w-5xl mx-auto flex items-end px-4 -mt-20 md:-mt-24">
+      <div className="relative max-w-5xl mx-auto flex items-end px-4 sm:px-6 md:px-8 -mt-20 md:-mt-24">
         {/* Avatar and Name in relative container */}
         <div className="relative flex items-end" style={{ minHeight: '160px' }}>
           {/* Avatar with camera icon */}
@@ -316,7 +316,7 @@ const ProfileOverview: React.FC = () => {
         </div>
       </div>
       {/* Tabs Row */}
-      <div className="max-w-5xl mx-auto mt-8 px-4">
+      <div className="max-w-5xl mx-auto mt-8 px-4 sm:px-6 md:px-8">
         <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
           {tabs.map(tab => (
             <button
@@ -330,7 +330,7 @@ const ProfileOverview: React.FC = () => {
         </div>
       </div>
       {/* Profile Summary Card or Settings Form */}
-      <div className="w-full max-w-5xl mx-auto mt-8 px-4">
+      <div className="w-full max-w-5xl mx-auto mt-8 px-4 sm:px-6 md:px-8">
         {activeTab === 'Settings' ? (
           <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 flex flex-col gap-8 border border-blue-100">
             {/* Settings Tabs */}

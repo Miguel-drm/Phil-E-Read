@@ -1210,7 +1210,7 @@ const ClassList: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 py-4">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 py-4">
         <div className="grid grid-cols-12 gap-4">
           {/* Class Grades Section */}
           <div className="col-span-12 lg:col-span-3">

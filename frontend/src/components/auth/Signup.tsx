@@ -112,7 +112,6 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative" style={{backgroundImage: `url(${backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center'}}>
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/70 via-blue-700/60 to-blue-400/40"></div>
       <form onSubmit={handleSubmit} className="bg-white/90 rounded-2xl shadow-2xl p-8 w-full max-w-md flex flex-col gap-5 relative z-10 border border-blue-100">
         <div className="flex flex-col items-center mb-2">
           <img src="/assets/img/phil-logo.svg" alt="Phil-E-Read Logo" className="w-22 h-22 mb-2" />

@@ -40,7 +40,7 @@ const Students: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-[1920px] mx-auto px-2 sm:px-4 lg:px-6 py-4">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 py-4">
         <div className="bg-white rounded-lg shadow h-[calc(100vh-6rem)] flex flex-col">
           <div className="px-3 py-3 border-b border-gray-200 sm:px-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Grades and Sections</h3>
