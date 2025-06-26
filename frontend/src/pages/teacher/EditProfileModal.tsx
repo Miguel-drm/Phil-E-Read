@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateUserProfile } from '../../services/authService';
 import { showSuccess, showError } from '../../services/alertService';
+import { uploadProfileOrBannerImageWithProgress } from '../../services/userProfileService';
 
 const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80';
 
@@ -11,13 +12,15 @@ interface EditProfileModalProps {
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
-  const { userProfile, refreshUserProfile } = useAuth();
+  const { userProfile, refreshUserProfile, currentUser } = useAuth();
   const [editAvatar, setEditAvatar] = useState<string | undefined>(userProfile?.photoURL);
   const [editBanner, setEditBanner] = useState<string>(bannerUrl);
   const [editBio, setEditBio] = useState(userProfile?.bio || '');
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
+  const [bannerUploadProgress, setBannerUploadProgress] = useState(0);
 
   if (!isOpen) return null;
 
@@ -48,13 +51,43 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
     setAvatarFile(null);
   };
   const handleEditSave = async () => {
+    if (!currentUser) {
+      showError('No user', 'You must be signed in to update your profile.');
+      return;
+    }
     setSavingEdit(true);
     try {
-      // TODO: Upload avatarFile and bannerFile if present, update Firestore with new URLs and bio
-      // For now, just close modal
+      // Upload avatar if changed
+      if (avatarFile) {
+        await uploadProfileOrBannerImageWithProgress(
+          currentUser.uid,
+          avatarFile,
+          'profile',
+          (percent) => setAvatarUploadProgress(percent)
+        );
+      }
+      // Upload banner if changed
+      if (bannerFile) {
+        await uploadProfileOrBannerImageWithProgress(
+          currentUser.uid,
+          bannerFile,
+          'banner',
+          (percent) => setBannerUploadProgress(percent)
+        );
+      }
+      // Optionally update bio or other fields here (call your updateProfile if needed)
+      // await updateProfile(currentUser.uid, { bio: editBio });
+
+      await refreshUserProfile();
+      showSuccess('Profile updated!');
       onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      showError('Update failed', message);
     } finally {
       setSavingEdit(false);
+      setAvatarUploadProgress(0);
+      setBannerUploadProgress(0);
     }
   };
 
@@ -104,6 +137,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
                 </svg>
               </label>
             </div>
+            {avatarUploadProgress > 0 && avatarUploadProgress < 100 && (
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${avatarUploadProgress}%` }} />
+              </div>
+            )}
             <span className="text-sm text-gray-500">Change Profile Picture</span>
           </div>
           {/* Banner */}
@@ -124,6 +162,11 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
               </label>
               <button className="absolute top-2 right-2 bg-white rounded-full px-3 py-1 text-xs text-gray-600 border border-gray-200 shadow hover:bg-gray-100" onClick={handleResetBanner}>Reset</button>
             </div>
+            {bannerUploadProgress > 0 && bannerUploadProgress < 100 && (
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${bannerUploadProgress}%` }} />
+              </div>
+            )}
             <span className="text-sm text-gray-500">Change Banner</span>
           </div>
           {/* Bio */}

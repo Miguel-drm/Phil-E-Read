@@ -158,7 +158,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             {...(userRole === 'teacher' ? { onShowSessionsModal: () => setShowSessionsModal(true) } : {})}
           />
           <main className="overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 w-full min-w-0 pt-2 sm:pt-[var(--header-height,56px)] md:pt-0">
-            <div className="w-full px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-6 lg:py-8 pb-[env(safe-area-inset-bottom)]">
+            <div className="w-full h-full flex flex-col px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-6 lg:py-8 pb-[env(safe-area-inset-bottom)]">
               {children ? children : <Outlet />}
             </div>
           </main>

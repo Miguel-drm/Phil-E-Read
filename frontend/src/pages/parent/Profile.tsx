@@ -8,6 +8,19 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import Cropper from 'react-easy-crop';
+import { uploadProfileImage, getProfileImageUrl, getBannerImageUrl } from '../../services/userProfileService';
+
+// Helper to convert base64 to File
+function dataURLtoFile(dataurl: string, filename: string) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)![1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type: mime });
+}
 
 const Profile: React.FC = () => {
   const { currentUser, userProfile, refreshUserProfile, signOut } = useAuth();
@@ -17,6 +30,20 @@ const Profile: React.FC = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Profile image state
+  const [profileImageCacheBuster, setProfileImageCacheBuster] = useState(0);
+  const [bannerImageCacheBuster, setBannerImageCacheBuster] = useState(0);
+  const [showProfileCropper, setShowProfileCropper] = useState(false);
+  const [showBannerCropper, setShowBannerCropper] = useState(false);
+  const [selectedProfileFile, setSelectedProfileFile] = useState<File | null>(null);
+  const [selectedBannerFile, setSelectedBannerFile] = useState<File | null>(null);
+  const [profileCrop, setProfileCrop] = useState({ x: 0, y: 0 });
+  const [profileZoom, setProfileZoom] = useState(1);
+  const [profileCroppedAreaPixels, setProfileCroppedAreaPixels] = useState<any>(null);
+  const [bannerCrop, setBannerCrop] = useState({ x: 0, y: 0 });
+  const [bannerZoom, setBannerZoom] = useState(1);
+  const [bannerCroppedAreaPixels, setBannerCroppedAreaPixels] = useState<any>(null);
 
   const [profileData, setProfileData] = useState({
     displayName: '',
@@ -210,6 +237,101 @@ const Profile: React.FC = () => {
     }
   };
 
+  // Handle profile image file selection
+  const handleProfileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+      setSelectedProfileFile(file);
+      setShowProfileCropper(true);
+    } else {
+      showError('Invalid file', 'Please select a JPG or PNG image.');
+    }
+  };
+
+  // Handle banner image file selection
+  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+      setSelectedBannerFile(file);
+      setShowBannerCropper(true);
+    } else {
+      showError('Invalid file', 'Please select a JPG or PNG image.');
+    }
+  };
+
+  // Get cropped image as base64
+  const getCroppedImg = async (imageSrc: string, cropPixels: any) => {
+    const image = new window.Image();
+    image.src = imageSrc;
+    await new Promise((resolve) => { image.onload = resolve; });
+    const canvas = document.createElement('canvas');
+    canvas.width = cropPixels.width;
+    canvas.height = cropPixels.height;
+    const ctx = canvas.getContext('2d');
+    ctx?.drawImage(
+      image,
+      cropPixels.x,
+      cropPixels.y,
+      cropPixels.width,
+      cropPixels.height,
+      0,
+      0,
+      cropPixels.width,
+      cropPixels.height
+    );
+    return canvas.toDataURL('image/jpeg');
+  };
+
+  // When cropping is done
+  const handleProfileCropComplete = async (_croppedArea: any, croppedAreaPixels: any) => {
+    setProfileCroppedAreaPixels(croppedAreaPixels);
+  };
+  const handleBannerCropComplete = async (_croppedArea: any, croppedAreaPixels: any) => {
+    setBannerCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  // Upload cropped profile image to backend
+  const handleProfileCropSave = async () => {
+    if (selectedProfileFile && profileCroppedAreaPixels && currentUser) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const imageDataUrl = e.target?.result as string;
+        const croppedImg = await getCroppedImg(imageDataUrl, profileCroppedAreaPixels);
+        setShowProfileCropper(false);
+        const file = dataURLtoFile(croppedImg, selectedProfileFile.name);
+        try {
+          await uploadProfileImage(currentUser.uid, file, 'profile');
+          showSuccess('Profile Image Updated', 'Your profile image has been updated!');
+          setProfileImageCacheBuster(Date.now());
+        } catch (err) {
+          showError('Upload Failed', 'Could not upload profile image.');
+        }
+      };
+      reader.readAsDataURL(selectedProfileFile);
+    }
+  };
+
+  // Upload cropped banner image to backend
+  const handleBannerCropSave = async () => {
+    if (selectedBannerFile && bannerCroppedAreaPixels && currentUser) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const imageDataUrl = e.target?.result as string;
+        const croppedImg = await getCroppedImg(imageDataUrl, bannerCroppedAreaPixels);
+        setShowBannerCropper(false);
+        const file = dataURLtoFile(croppedImg, selectedBannerFile.name);
+        try {
+          await uploadProfileImage(currentUser.uid, file, 'banner');
+          showSuccess('Banner Image Updated', 'Your banner image has been updated!');
+          setBannerImageCacheBuster(Date.now());
+        } catch (err) {
+          showError('Upload Failed', 'Could not upload banner image.');
+        }
+      };
+      reader.readAsDataURL(selectedBannerFile);
+    }
+  };
+
   return (
     <div className="profile-page px-4 sm:px-6 md:px-8">
       {/* Header */}
@@ -295,7 +417,98 @@ const Profile: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Personal Information</h2>
-            
+            <div className="flex flex-col items-center mb-6 w-full">
+              {/* Banner Image */}
+              <div className="relative w-full max-w-2xl mb-4">
+                <img
+                  src={getBannerImageUrl(currentUser?.uid || '') + (bannerImageCacheBuster ? `?cb=${bannerImageCacheBuster}` : '')}
+                  alt="Banner"
+                  className="w-full h-32 md:h-48 object-cover rounded-lg border border-gray-200"
+                  onError={e => (e.currentTarget.src = '/default-banner.png')}
+                />
+                <button
+                  className="absolute top-2 right-2 bg-white bg-opacity-80 rounded px-3 py-1 text-sm shadow hover:bg-opacity-100"
+                  onClick={() => document.getElementById('banner-image-input')?.click()}
+                  type="button"
+                >
+                  Change Banner
+                </button>
+                <input
+                  id="banner-image-input"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleBannerFileChange}
+                  className="hidden"
+                />
+                {showBannerCropper && selectedBannerFile && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white p-4 rounded shadow-lg w-[90vw] max-w-2xl">
+                      <h2 className="text-lg font-semibold mb-2">Crop Banner Image</h2>
+                      <div className="relative w-full h-40 md:h-64 bg-gray-100">
+                        <Cropper
+                          image={URL.createObjectURL(selectedBannerFile)}
+                          crop={bannerCrop}
+                          zoom={bannerZoom}
+                          aspect={4}
+                          onCropChange={setBannerCrop}
+                          onZoomChange={setBannerZoom}
+                          onCropComplete={handleBannerCropComplete}
+                        />
+                      </div>
+                      <div className="flex gap-2 mt-4 justify-end">
+                        <button className="btn btn-primary" onClick={handleBannerCropSave}>Save</button>
+                        <button className="btn btn-secondary" onClick={() => setShowBannerCropper(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Profile Image */}
+              <div className="relative flex flex-col items-center mb-2">
+                <img
+                  src={getProfileImageUrl(currentUser?.uid || '') + (profileImageCacheBuster ? `?cb=${profileImageCacheBuster}` : '')}
+                  alt="Profile"
+                  className="rounded-full w-24 h-24 object-cover border border-gray-200"
+                  onError={e => (e.currentTarget.src = '/default-profile.png')}
+                />
+                <button
+                  className="mt-2 bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow hover:bg-gray-100"
+                  onClick={() => document.getElementById('profile-image-input')?.click()}
+                  type="button"
+                >
+                  Change Profile
+                </button>
+                <input
+                  id="profile-image-input"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleProfileFileChange}
+                  className="hidden"
+                />
+                {showProfileCropper && selectedProfileFile && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white p-4 rounded shadow-lg w-[90vw] max-w-md">
+                      <h2 className="text-lg font-semibold mb-2">Crop Profile Image</h2>
+                      <div className="relative w-64 h-64 bg-gray-100">
+                        <Cropper
+                          image={URL.createObjectURL(selectedProfileFile)}
+                          crop={profileCrop}
+                          zoom={profileZoom}
+                          aspect={1}
+                          onCropChange={setProfileCrop}
+                          onZoomChange={setProfileZoom}
+                          onCropComplete={handleProfileCropComplete}
+                        />
+                      </div>
+                      <div className="flex gap-2 mt-4 justify-end">
+                        <button className="btn btn-primary" onClick={handleProfileCropSave}>Save</button>
+                        <button className="btn btn-secondary" onClick={() => setShowProfileCropper(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

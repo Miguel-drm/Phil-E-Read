@@ -822,14 +822,13 @@ const ReadingSessionPage: React.FC = () => {
       )}
 
       {/* Story Content + Progress Side by Side */}
-      <section className="w-full px-4 sm:px-8 mb-6 flex flex-col lg:flex-row gap-8">
+      <section className="w-full px-4 sm:px-8 mb-6 flex flex-col lg:flex-row gap-8 items-stretch min-h-[calc(100vh-100px)] h-full">
         {/* Story Content */}
-        <div className="flex-1">
-          <div className="relative bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-10 overflow-hidden max-h-[48rem]">
-            {/* Progress Bar */}
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-t-3xl animate-pulse" style={{ width: `${Math.min((currentWordIndex / words.length) * 100, 100)}%` }}></div>
-            <div className="mb-8 flex items-center justify-between">
-              <h3 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
+        <div className="flex-1 flex flex-col h-full">
+          <div className="relative bg-white/90 rounded-3xl shadow-2xl border border-blue-100 p-0 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-50/80 to-purple-50/80 px-10 pt-8 pb-4 border-b border-blue-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <h3 className="text-2xl font-extrabold text-blue-900 flex items-center gap-2">
                 <BookOpenIcon className="h-7 w-7 text-blue-500" /> Story Content
               </h3>
               <div className="flex items-center gap-6 text-lg text-blue-700">
@@ -838,7 +837,8 @@ const ReadingSessionPage: React.FC = () => {
                 <span>{storyText ? storyText.split('\n\n').length : pdfContent.split('\n\n').length} paragraphs</span>
               </div>
             </div>
-            <div className="max-h-[38rem] overflow-y-auto custom-scrollbar prose prose-xl prose-blue bg-white/60 rounded-xl p-8 shadow-inner text-[1.35rem] leading-relaxed tracking-wide">
+            {/* Story Text */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar prose prose-xl prose-blue bg-white/60 rounded-xl px-10 py-8 shadow-inner text-[1.35rem] leading-relaxed tracking-wide">
               {(storyText || pdfContent) ? (
                 (storyText ? storyText : pdfContent).split('\n\n').filter(p => p.trim().length > 0).map((paragraph, paragraphIndex, paragraphs) => {
                   const wordsInParagraph = paragraph.trim().split(/\s+/);
@@ -859,10 +859,10 @@ const ReadingSessionPage: React.FC = () => {
                                   ? 'inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl text-gray-400 bg-transparent pointer-events-none select-none not-allowed'
                                   : `inline-block mr-3 mb-2 px-3 py-2 rounded font-serif text-2xl transition-all duration-200 ` +
                                     (isCurrentWord
-                                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold shadow-lg scale-110 animate-pulse'
+                                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-extrabold shadow-lg scale-110 animate-pulse ring-4 ring-blue-300 ring-opacity-40'
                                       : 'bg-blue-50 text-blue-900 hover:bg-blue-100 hover:text-blue-700 cursor-pointer')
                               }
-                              style={isCurrentWord ? { boxShadow: '0 0 12px 2px #a5b4fc' } : {}}
+                              style={isCurrentWord ? { boxShadow: '0 0 16px 2px #a5b4fc' } : {}}
                             >
                               {word}
                             </span>
@@ -876,137 +876,152 @@ const ReadingSessionPage: React.FC = () => {
                 <div className="text-center text-gray-400 py-12">No story content available</div>
               )}
             </div>
-            {(pdfError || error) && !storyText && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 rounded-3xl shadow-xl z-10">
-                <XCircleIcon className="h-16 w-16 text-red-400 mb-4" />
-                <div className="text-lg text-red-600 mb-4">{pdfError || error}</div>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-6 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition"
-                >
-                  Retry
-                </button>
+
+            {/* Session Controls - Improved Layout */}
+            <div className="px-10 py-6 flex flex-col items-center gap-4 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border-t border-blue-100">
+              <div className="flex items-center gap-4">
+                <MicrophoneIcon className="h-7 w-7 text-blue-500 animate-pulse" />
+                <h4 className="text-lg font-bold text-blue-900">Session Controls</h4>
+                {/* Status Indicator */}
+                <span className={`ml-2 px-3 py-1 rounded-full text-sm font-semibold shadow transition-all duration-200 ${isRecording ? 'bg-green-100 text-green-700' : isPaused ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>{isRecording ? (isPaused ? 'Paused' : 'Recording') : 'Stopped'}</span>
               </div>
-            )}
+              <div className="flex flex-wrap justify-center gap-4 w-full">
+                {!isRecording ? (
+                  <button
+                    onClick={handleStartRecording}
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-lg font-bold shadow-lg hover:scale-105 hover:from-blue-600 hover:to-purple-600 transition-all duration-200"
+                    title="Start Session"
+                  >
+                    <MicrophoneIcon className="h-6 w-6" /> Start
+                  </button>
+                ) : (
+                  <>
+                    {isPaused ? (
+                      <button
+                        onClick={handleResumeRecording}
+                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-green-400 to-blue-400 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                        title="Resume Recording"
+                      >
+                        <PlayIcon className="h-6 w-6" /> Resume
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePauseRecording}
+                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                        title="Pause Recording"
+                      >
+                        <PauseIcon className="h-6 w-6" /> Pause
+                      </button>
+                    )}
+                    <button
+                      onClick={handleStopRecording}
+                      className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                      title="Stop Recording"
+                    >
+                      <StopIcon className="h-6 w-6" /> Stop
+                    </button>
+                  </>
+                )}
+                {currentSession?.status === 'in-progress' && (
+                  <button
+                    onClick={handleCompleteSession}
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-green-500 to-blue-500 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200"
+                    title="Complete Session"
+                  >
+                    <ChartBarIcon className="h-6 w-6" /> Complete Session
+                  </button>
+                )}
+              </div>
+              {/* Download Audio Button (show only if audioUrl exists) */}
+              {audioUrl && (
+                <button
+                  onClick={handleDownloadAudio}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-green-400 to-blue-400 text-white text-base font-bold shadow-lg hover:scale-105 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+                  title="Download audio recording"
+                >
+                  <svg xmlns='http://www.w3.org/2000/svg' className='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4' /></svg>
+                  Download Audio
+                </button>
+              )}
+            </div>
           </div>
         </div>
         {/* Progress Column */}
-        <div className="w-full lg:w-80 flex-shrink-0">
-          <div className="flex flex-col gap-4">
-            {/* Students */}
-            <div className="rounded-xl bg-blue-100 shadow p-4 flex flex-col items-center">
-              <span className="text-blue-700 font-bold text-lg mb-1 flex items-center gap-2"><UserGroupIcon className="h-5 w-5 text-blue-500" />Students</span>
-              <div className="flex flex-wrap gap-1 justify-center">
-                {currentSession?.students.map((student: string, idx: number) => (
-                  <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-200 text-blue-800 shadow-sm">
-                    {student}
-                  </span>
-                ))}
+        <div className="w-full lg:w-96 flex-shrink-0 h-[calc(100vh-200px)]">
+          {isRecording ? (
+            <div className="flex flex-col gap-4 h-full justify-center items-center bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-10">
+              <span className="text-lg text-blue-700 font-semibold text-center">Finish the story and stop the session to see your reading results.</span>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-6">
+              <div className="text-center mb-4">
+                <h3 className="text-2xl font-bold text-blue-900 mb-1">Reading Results</h3>
+                <div className="h-1 w-24 mx-auto bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
+              </div>
+
+              {/* Session Info Group */}
+              <div className="flex-1 flex flex-col gap-y-4">
+                {/* Students */}
+                <div className="flex-1 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md p-3 flex flex-col">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <UserGroupIcon className="h-5 w-5 text-blue-600" />
+                    <h4 className="font-semibold text-blue-900">Students</h4>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentSession?.students.map((student: string, idx: number) => (
+                      <span key={idx} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        {student}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Book */}
+                <div className="flex-1 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md p-3 flex flex-col">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <BookOpenIcon className="h-5 w-5 text-indigo-600" />
+                    <h4 className="font-semibold text-indigo-900">Book</h4>
+                  </div>
+                  <p className="text-indigo-800">{currentSession?.book || 'The Clebber Rabit Story'}</p>
+                </div>
+
+                {/* Performance Metrics Group */}
+                <div className="flex-1 flex flex-col gap-y-4">
+                  {/* Words Read */}
+                  <div className="flex-1 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-3 shadow-md flex flex-col">
+                    <p className="text-sm font-medium text-green-800 mb-1">Words Read</p>
+                    <p className="text-2xl font-bold text-green-700">{wordsRead}</p>
+                  </div>
+
+                  {/* Reading Speed */}
+                  <div className="flex-1 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 p-3 shadow-md flex flex-col">
+                    <p className="text-sm font-medium text-emerald-800 mb-1">Reading Speed</p>
+                    <p className="text-2xl font-bold text-emerald-700">{readingSpeedWPM} <span className="text-sm">WPM</span></p>
+                  </div>
+
+                  {/* Miscues */}
+                  <div className="flex-1 rounded-xl bg-gradient-to-br from-red-50 to-rose-50 p-3 shadow-md flex flex-col">
+                    <p className="text-sm font-medium text-red-800 mb-1">Miscues</p>
+                    <p className="text-2xl font-bold text-red-700">{miscues}</p>
+                  </div>
+
+                  {/* Reading Score */}
+                  <div className="flex-1 rounded-xl bg-gradient-to-br from-yellow-50 to-amber-50 p-3 shadow-md flex flex-col">
+                    <p className="text-sm font-medium text-yellow-800 mb-1">Reading Score</p>
+                    <p className="text-2xl font-bold text-yellow-700">{oralReadingScore}%</p>
+                  </div>
+
+                  {/* Time Elapsed */}
+                  <div className="flex-1 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 p-3 shadow-md flex flex-col">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <ClockIcon className="h-5 w-5 text-orange-600" />
+                      <h4 className="font-semibold text-orange-900">Time Elapsed</h4>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-700">{formatTime(elapsedTime)}</p>
+                  </div>
+                </div>
               </div>
             </div>
-            {/* Words Read */}
-            <div className="rounded-xl bg-blue-100 shadow p-4 flex flex-col items-center">
-              <span className="text-blue-700 font-bold text-lg">Words Read</span>
-              <span className="text-2xl font-extrabold text-blue-700 mt-1">{wordsRead}</span>
-            </div>
-            {/* Miscues */}
-            <div className="rounded-xl bg-red-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
-              <span className="text-red-700 font-bold">Miscues</span>
-              <span className="text-xl font-extrabold text-red-700">{miscues}</span>
-            </div>
-            {/* Oral Reading Score */}
-            <div className="rounded-xl bg-yellow-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
-              <span className="text-yellow-700 font-bold">Oral Reading Score</span>
-              <span className="text-xl font-extrabold text-yellow-700">{oralReadingScore}%</span>
-            </div>
-            {/* Reading Speed */}
-            <div className="rounded-xl bg-green-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
-              <span className="text-green-700 font-bold">Reading Speed</span>
-              <span className="text-xl font-extrabold text-green-700">{readingSpeedWPM} WPM</span>
-            </div>
-            {/* Comprehension */}
-            <div className="rounded-xl bg-blue-100 shadow p-2 sm:p-3 md:p-4 flex flex-row md:flex-col items-center justify-between text-xs sm:text-sm md:text-base mb-1">
-              <span className="text-blue-700 font-bold">Comprehension</span>
-              <span className="text-xl font-extrabold text-blue-700 ml-2">{comprehensionAnswers}/{totalComprehensionQuestions} ({comprehensionPercent}%)</span>
-            </div>
-            {/* Elapsed */}
-            <div className="rounded-xl bg-yellow-100 shadow p-4 flex flex-col items-center">
-              <span className="text-yellow-700 font-bold text-lg">Elapsed</span>
-              <span className="text-2xl font-extrabold text-yellow-700 mt-1">{formatTime(elapsedTime)}</span>
-            </div>
-            {/* Book */}
-            <div className="rounded-xl bg-indigo-100 shadow p-4 flex flex-col items-center">
-              <span className="text-indigo-700 font-bold text-lg">Book</span>
-              <span className="text-lg font-semibold text-indigo-700 mt-1">{currentSession?.book}</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Session Controls */}
-      <section className="w-full px-4 sm:px-8 pb-8">
-        <div className="bg-white/80 rounded-3xl shadow-xl border border-blue-100 p-8 flex flex-col items-center gap-6">
-          <div className="flex items-center gap-4 mb-2">
-            <MicrophoneIcon className="h-7 w-7 text-blue-500" />
-            <h4 className="text-lg font-bold text-blue-900">Session Controls</h4>
-          </div>
-          <div className="flex flex-row flex-wrap justify-center gap-6 w-full">
-            {!isRecording ? (
-              <button
-                onClick={handleStartRecording}
-                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xl font-bold shadow-lg hover:scale-105 hover:from-blue-600 hover:to-purple-600 transition-all duration-200"
-                title="Start Session"
-              >
-                <MicrophoneIcon className="h-7 w-7" /> Start
-              </button>
-            ) : (
-              <>
-                {isPaused ? (
-                  <button
-                    onClick={handleResumeRecording}
-                    className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 to-blue-400 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
-                    title="Resume Recording"
-                  >
-                    <PlayIcon className="h-7 w-7" /> Resume
-                  </button>
-                ) : (
-                  <button
-                    onClick={handlePauseRecording}
-                    className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
-                    title="Pause Recording"
-                  >
-                    <PauseIcon className="h-7 w-7" /> Pause
-                  </button>
-                )}
-                <button
-                  onClick={handleStopRecording}
-                  className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
-                  title="Stop Recording"
-                >
-                  <StopIcon className="h-7 w-7" /> Stop
-                </button>
-              </>
-            )}
-            {currentSession?.status === 'in-progress' && (
-              <button
-                onClick={handleCompleteSession}
-                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-blue-500 text-white text-xl font-bold shadow-lg hover:scale-105 transition-all duration-200"
-                title="Complete Session"
-              >
-                <ChartBarIcon className="h-7 w-7" /> Complete Session
-              </button>
-            )}
-          </div>
-          {/* Download Audio Button (show only if audioUrl exists) */}
-          {audioUrl && (
-            <button
-              onClick={handleDownloadAudio}
-              className="mt-6 flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-400 to-blue-400 text-white text-lg font-bold shadow-lg hover:scale-105 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
-              title="Download audio recording"
-            >
-              <svg xmlns='http://www.w3.org/2000/svg' className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4' /></svg>
-              Download Audio
-            </button>
           )}
         </div>
       </section>

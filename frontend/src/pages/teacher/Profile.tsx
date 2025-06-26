@@ -10,7 +10,6 @@ import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Routes, Route } from 'react-router-dom';
 import ProfileOverview from './ProfileOverview';
-import Cropper from 'react-easy-crop';
 
 const Profile: React.FC = () => {
   const { currentUser, userProfile, refreshUserProfile, signOut } = useAuth();

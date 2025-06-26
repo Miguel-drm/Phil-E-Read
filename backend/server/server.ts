@@ -1,5 +1,6 @@
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import type { RequestHandler } from 'express-serve-static-core';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import multer from 'multer';
@@ -8,7 +9,8 @@ import { mongoStoryService } from './services/mongoStoryService.js';
 import { initGridFSBucket } from './config/gridfsConfig.js';
 import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
-import GridFSService from './services/gridfsService.js';
+import { GridFSService } from './services/gridfsService.js';
+import { UserProfileService } from './services/userProfileService.js';
 
 dotenv.config();
 
@@ -17,17 +19,17 @@ const PORT = process.env.PORT || 5000;
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Configure multer for PDF uploads
+// Configure multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 5 * 1024 * 1024, // 5MB limit for images
   },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'));
+      cb(new Error('Only image files are allowed'));
     }
   },
 });
@@ -473,6 +475,117 @@ app.use(express.json());
         return;
       }
     });
+
+    // User Profile Routes
+    const uploadProfileImage: RequestHandler = async (req, res, next) => {
+      try {
+        const { userId } = req.params;
+        const file = req.file;
+        const type = (req.body.type === 'banner') ? 'banner' : 'profile';
+
+        if (!file) {
+          res.status(400).json({ message: 'No image file provided' });
+          return;
+        }
+
+        const updatedProfile = await UserProfileService.updateProfileImage(
+          userId,
+          file.buffer,
+          file.originalname,
+          type
+        );
+
+        res.json({
+          message: 'Profile image updated successfully',
+          profile: updatedProfile
+        });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProfileImage: RequestHandler = async (req, res, next) => {
+      try {
+        const { userId } = req.params;
+        const type = (req.query.type === 'banner') ? 'banner' : 'profile';
+        const imageData = await UserProfileService.getProfileImage(userId, type);
+
+        if (!imageData) {
+          res.status(404).json({ message: 'Profile image not found' });
+          return;
+        }
+
+        // Set appropriate content type
+        res.setHeader('Content-Type', imageData.metadata.contentType || 'image/jpeg');
+        res.send(imageData.buffer);
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProfile: RequestHandler = async (req, res, next) => {
+      try {
+        const { userId } = req.params;
+        const profile = await UserProfileService.getProfile(userId);
+
+        if (!profile) {
+          res.status(404).json({ message: 'Profile not found' });
+          return;
+        }
+
+        res.json(profile);
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const createProfile: RequestHandler = async (req, res, next) => {
+      try {
+        const { userId, role, displayName } = req.body;
+
+        if (!userId || !role) {
+          res.status(400).json({ message: 'userId and role are required' });
+          return;
+        }
+
+        const profile = await UserProfileService.createProfile(userId, role, displayName);
+        res.status(201).json(profile);
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const updateProfile: RequestHandler = async (req, res, next) => {
+      try {
+        const { userId } = req.params;
+        const updates = req.body;
+
+        const updatedProfile = await UserProfileService.updateProfile(userId, updates);
+
+        if (!updatedProfile) {
+          res.status(404).json({ message: 'Profile not found' });
+          return;
+        }
+
+        res.json(updatedProfile);
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    // Register routes
+    app.post('/api/profile/:userId/image', upload.single('image'), uploadProfileImage);
+    app.get('/api/profile/:userId/image', getProfileImage);
+    app.get('/api/profile/:userId', getProfile);
+    app.post('/api/profile', createProfile);
+    app.put('/api/profile/:userId', updateProfile);
+
+    // Add error handling middleware
+    const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+      console.error(err.stack);
+      res.status(500).json({ message: 'Something went wrong!' });
+    };
+    app.use(errorHandler);
 
   } catch (error) {
     console.error('Failed to connect to MongoDB or initialize GridFS:', error);
