@@ -95,6 +95,13 @@ service cloud.firestore {
       );
     }
 
+    // Tests collection rules
+    match /tests/{testId} {
+      allow read: if isAuthenticated() && (isTeacher() || isAdmin());
+      allow create: if isAuthenticated() && (isTeacher() || isAdmin());
+      allow update, delete: if isAuthenticated() && (isTeacher() || isAdmin());
+    }
+
     // Default rule - deny all other access
     match /{document=**} {
       allow read, write: if false;

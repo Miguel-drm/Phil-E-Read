@@ -23,6 +23,9 @@ import Reports from './pages/teacher/Reports';
 import Profile from './pages/teacher/Profile';
 import ReadingSessionPage from './pages/teacher/ReadingSessionPage';
 
+// Student Pages
+import StudentTestPage from './pages/student/StudentTestPage';
+
 // Parent Pages
 import ProgressPage from './pages/parent/Progress';
 import AssignmentsPage from './pages/parent/Assignments';
@@ -78,6 +81,16 @@ const App: React.FC = () => {
                     <Route path="reading-session/:sessionId" element={<ReadingSessionPage />} />
                   </Routes>
                 </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Student test route - accessible by teachers for their students */}
+          <Route
+            path="/student/test/:testId"
+            element={
+              <ProtectedRoute allowedRoles={['teacher']}>
+                <StudentTestPage />
               </ProtectedRoute>
             }
           />

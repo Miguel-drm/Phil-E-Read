@@ -49,6 +49,10 @@ const Header: React.FC<HeaderProps> = ({
     ) {
       return 'Reading Session';
     }
+    // If the route is /student/test/:testId, show 'Student Test' instead of the testId
+    if (pathParts.includes('student') && pathParts.includes('test')) {
+      return 'Student Test';
+    }
     const path = pathParts.pop();
     return path ? path.charAt(0).toUpperCase() + path.slice(1) : 'Dashboard';
   };
