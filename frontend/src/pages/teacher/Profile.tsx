@@ -1,17 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { updateUserProfile } from '../../services/authService';
-import { showSuccess, showError, showConfirmation } from '../../services/alertService';
-import Swal from 'sweetalert2'; // Import SweetAlert2 for re-authentication prompt
-import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../config/firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 import { Routes, Route } from 'react-router-dom';
 import ProfileOverview from './ProfileOverview';
 
 const Profile: React.FC = () => {
+<<<<<<< HEAD
   const { currentUser, userProfile, refreshUserProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('personal');
   const [isEditing, setIsEditing] = useState(false);
@@ -213,6 +206,9 @@ const Profile: React.FC = () => {
       }
     }
   };
+=======
+  useAuth();
+>>>>>>> origin/Jbranch
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

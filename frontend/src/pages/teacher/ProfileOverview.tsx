@@ -1,24 +1,45 @@
-import React, { useRef, useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { storage, db } from '../../config/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
-import { updateUserProfile } from '../../services/authService';
-import { showSuccess, showError } from '../../services/alertService';
-import Swal from 'sweetalert2';
-import { EmailAuthProvider, reauthenticateWithCredential, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../config/firebase';
-import { deleteDoc } from 'firebase/firestore';
 import { EditProfileModalContext } from '../../components/layout/DashboardLayout';
-
-function getInitials(name: string) {
-  if (!name) return '';
-  const names = name.split(' ');
-  return names.map(n => n[0]).join('').toUpperCase();
-}
+import axios from 'axios';
+import Cropper from 'react-easy-crop';
 
 const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80'; // Placeholder banner
+
+// Helper to get cropped image as blob
+async function getCroppedImg(imageSrc: string, crop: any) {
+  const createImage = (url: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+      image.addEventListener('load', () => resolve(image));
+      image.addEventListener('error', error => reject(error));
+      image.setAttribute('crossOrigin', 'anonymous');
+      image.src = url;
+    });
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+  ctx.drawImage(
+    image,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    crop.width,
+    crop.height
+  );
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas is empty'));
+    }, 'image/png');
+  });
+}
 
 const tabs = [
   'Profile',
@@ -31,13 +52,8 @@ const tabs = [
 ];
 
 const ProfileOverview: React.FC = () => {
-  const { userProfile, refreshUserProfile } = useAuth();
-  const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState(userProfile?.photoURL || undefined);
   const [activeTab, setActiveTab] = useState('Profile');
   // Profile settings state
   const [isEditing, setIsEditing] = useState(false);
@@ -71,15 +87,17 @@ const ProfileOverview: React.FC = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  // Modal state for editing
-  const [editAvatar, setEditAvatar] = useState<string | undefined>(avatarUrl);
-  const [editBanner, setEditBanner] = useState<string>(bannerUrl);
-  const [editBio, setEditBio] = useState(userProfile?.bio || '');
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [savingEdit, setSavingEdit] = useState(false);
   const { openEditProfileModal } = useContext(EditProfileModalContext);
+  const { currentUser } = useAuth();
+  const firebaseUid = currentUser?.uid;
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  // Cropper modal state
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
   React.useEffect(() => {
     if (userProfile) {
@@ -93,21 +111,26 @@ const ProfileOverview: React.FC = () => {
     }
   }, [userProfile]);
 
+  useEffect(() => {
+    async function fetchProfileImage() {
+      if (!firebaseUid) return;
+      try {
+        const res = await axios.get(`/api/teachers/${firebaseUid}/profile-image`);
+        if (res.data && res.data.profileImage) {
+          setProfileImage(`data:image/png;base64,${res.data.profileImage}`);
+        }
+      } catch (err) {
+        setProfileImage(null);
+      }
+    }
+    fetchProfileImage();
+  }, [firebaseUid]);
+
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      await updateUserProfile({
-        displayName: profileData.displayName,
-        email: profileData.email,
-        phoneNumber: profileData.phoneNumber,
-        school: profileData.school,
-        gradeLevel: profileData.gradeLevel,
-      });
-      await refreshUserProfile?.();
       setIsEditing(false);
-      showSuccess('Profile Updated', 'Your profile has been updated successfully!');
     } catch (error) {
-      showError('Update Failed', 'Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -119,40 +142,61 @@ const ProfileOverview: React.FC = () => {
     }
   };
 
+  // Crop logic for main profile
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !userProfile || !userProfile.email) return;
-    setError(null);
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const userId = userProfile.email;
-      const storageRef = ref(storage, `profilePictures/${userId}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (err) => {
-          setError('Upload failed. Please try again.');
-          setUploading(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          // Update Firestore user document
-          await updateDoc(doc(db, 'users', userId), { photoURL: downloadURL });
-          setAvatarUrl(downloadURL);
-          setUploading(false);
-          setUploadProgress(0);
-          await refreshUserProfile?.();
-        }
-      );
-    } catch (err) {
-      setError('Upload failed. Please try again.');
-      setUploading(false);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageToCrop(reader.result as string);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
   };
+
+  // When crop is confirmed
+  const handleCropConfirm = useCallback(async () => {
+    if (!imageToCrop || !croppedAreaPixels || !firebaseUid || !userProfile) return;
+    try {
+      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      // 1. Sync teacher document first
+      await fetch('/api/teachers/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firebaseUid,
+          name: userProfile.displayName || 'Teacher',
+          email: userProfile.email || ''
+        })
+      });
+      // 2. Upload the cropped image
+      const formData = new FormData();
+      formData.append('image', new File([croppedBlob], 'avatar.png', { type: 'image/png' }));
+      const response = await fetch(`/api/teachers/${firebaseUid}/profile-image`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.success) {
+        setShowCropModal(false);
+        setImageToCrop(null);
+        window.location.reload();
+      } else {
+        alert('Upload failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      alert('Upload failed: ' + err.message);
+    }
+  }, [imageToCrop, croppedAreaPixels, firebaseUid, userProfile]);
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setImageToCrop(null);
+  };
+
+  const onCropComplete = useCallback((_: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
   const handleChangePassword = async () => {
     if (!userProfile || !userProfile.email) return;
@@ -160,10 +204,10 @@ const ProfileOverview: React.FC = () => {
     if (result) {
       setIsChangingPassword(true);
       try {
-        await sendPasswordResetEmail(auth, userProfile.email);
-        showSuccess('Email Sent', 'Password reset instructions have been sent to your email.');
+        // await sendPasswordResetEmail(auth, userProfile.email);
+        // showSuccess('Email Sent', 'Password reset instructions have been sent to your email.');
       } catch (error) {
-        showError('Email Failed', 'Failed to send password reset email.');
+        // showError('Email Failed', 'Failed to send password reset email.');
       } finally {
         setIsChangingPassword(false);
       }
@@ -171,16 +215,16 @@ const ProfileOverview: React.FC = () => {
   };
 
   const handleUpdatePreferences = () => {
-    showSuccess('Preferences Updated', 'Your preferences have been saved successfully!');
+    // showSuccess('Preferences Updated', 'Your preferences have been saved successfully!');
   };
 
   const handleExportData = async () => {
     setIsExportingData(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      showSuccess('Export Started', 'Your data export will be available for download shortly.');
+      // showSuccess('Export Started', 'Your data export will be available for download shortly.');
     } catch (error) {
-      showError('Export Failed', 'An error occurred during data export.');
+      // showError('Export Failed', 'An error occurred during data export.');
     } finally {
       setIsExportingData(false);
     }
@@ -194,51 +238,16 @@ const ProfileOverview: React.FC = () => {
       try {
         // Simulate deletion
         await new Promise(resolve => setTimeout(resolve, 2000));
-        showSuccess('Account Deleted', 'Your account and all associated data have been permanently deleted.');
+        // showSuccess('Account Deleted', 'Your account and all associated data have been permanently deleted.');
       } catch (error) {
-        showError('Deletion Failed', 'An error occurred during account deletion.');
+        // showError('Deletion Failed', 'An error occurred during account deletion.');
       } finally {
         setIsDeletingAccount(false);
       }
     }
   };
 
-  const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
-      setEditAvatar(URL.createObjectURL(file));
-    }
-  };
-  const handleEditBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setBannerFile(file);
-      setEditBanner(URL.createObjectURL(file));
-    }
-  };
-  const handleResetBanner = () => {
-    setBannerFile(null);
-    setEditBanner(bannerUrl);
-  };
-  const handleEditCancel = () => {
-    setIsEditModalOpen(false);
-    setEditAvatar(avatarUrl);
-    setEditBanner(bannerUrl);
-    setEditBio(userProfile?.bio || '');
-    setBannerFile(null);
-    setAvatarFile(null);
-  };
-  const handleEditSave = async () => {
-    setSavingEdit(true);
-    try {
-      // TODO: Upload avatarFile and bannerFile if present, update Firestore with new URLs and bio
-      // For now, just close modal
-      setIsEditModalOpen(false);
-    } finally {
-      setSavingEdit(false);
-    }
-  };
+  if (!firebaseUid) return <div>Loading...</div>;
 
   return (
     <div className="w-full min-h-screen bg-gray-50">
@@ -251,22 +260,34 @@ const ProfileOverview: React.FC = () => {
         />
       </div>
       {/* Profile Header Row: Avatar, Name, Actions */}
+<<<<<<< HEAD
       <div className="relative max-w-5xl mx-auto flex items-end px-4 sm:px-6 md:px-8 -mt-20 md:-mt-24">
         {/* Avatar and Name in relative container */}
+=======
+      <div className="relative max-w-5xl mx-auto flex items-end px-4 -mt-20 md:-mt-24">
+        {/* Avatar and Name+Button in relative container */}
+>>>>>>> origin/Jbranch
         <div className="relative flex items-end" style={{ minHeight: '160px' }}>
           {/* Avatar with camera icon */}
           <div className="relative z-10">
-            <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden">
-              {avatarUrl ? (
+            <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden relative">
+              {profileImage ? (
                 <img
-                  src={avatarUrl}
+                  src={profileImage}
                   alt="Profile"
-                  className="object-cover w-full h-full rounded-full"
+                  className="object-cover w-full h-full rounded-full z-10"
+                  style={{ position: 'relative', zIndex: 10 }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-5xl md:text-6xl font-bold">
-                  {getInitials(userProfile?.displayName || userProfile?.email || '') || '?'}
-                </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-24 h-24"
+                  viewBox="0 0 24 24"
+                  fill="#cfd8dc"
+                >
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-2.21 3.58-4 8-4s8 1.79 8 4v1H4v-1z" />
+                </svg>
               )}
             </div>
             {/* Camera Icon Overlay */}
@@ -277,7 +298,6 @@ const ProfileOverview: React.FC = () => {
               aria-label="Change profile photo"
               onClick={handleCameraClick}
               type="button"
-              disabled={uploading}
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-gray-700">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 19.5V6.75A2.25 2.25 0 014.5 4.5h3.379c.414 0 .789.252.937.64l.574 1.53a.75.75 0 00.7.48h4.38a.75.75 0 00.7-.48l.574-1.53a1 1 0 01.937-.64H19.5a2.25 2.25 0 012.25 2.25v12.75a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 19.5z" />
@@ -290,29 +310,50 @@ const ProfileOverview: React.FC = () => {
               ref={fileInputRef}
               className="hidden"
               onChange={handleFileChange}
-              disabled={uploading}
             />
           </div>
-          {/* Name and subline, aligned with lower third of avatar */}
-          <div className="flex flex-col justify-end ml-6 pb-4">
+          {/* Cropper Modal */}
+          {showCropModal && (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60">
+              <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-4xl relative flex flex-col items-center">
+                <h3 className="text-lg font-semibold mb-4">Crop Image</h3>
+                <div className="relative w-[600px] h-[600px] bg-gray-100">
+                  <Cropper
+                    image={imageToCrop!}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={onCropComplete}
+                  />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300" onClick={handleCropCancel}>Cancel</button>
+                  <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={handleCropConfirm}>Crop</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Name, role, and Edit Profile button inline */}
+        <div className="flex flex-col justify-end ml-6 pb-4 flex-1">
+          <div className="flex items-center">
             <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight mb-0">
               {userProfile?.displayName || '-'}
             </h2>
-            <span className="text-base text-gray-500 font-medium mt-0">Teacher</span>
+            <button
+              onClick={openEditProfileModal}
+              className="ml-60 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow transition-colors text-base font-semibold"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487c.637-1.093-.148-2.487-1.392-2.487H8.53c-1.244 0-2.029 1.394-1.392 2.487l.7 1.2A2.25 2.25 0 007.5 7.25v.25c0 .414.336.75.75.75h7.5a.75.75 0 00.75-.75v-.25a2.25 2.25 0 00-.338-1.563l.7-1.2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75v2.25m0 0a2.25 2.25 0 01-2.25-2.25h4.5a2.25 2.25 0 01-2.25 2.25z" />
+              </svg>
+              Edit Profile
+            </button>
           </div>
-        </div>
-        {/* Actions (Edit Profile) */}
-        <div className="flex-1 flex justify-end items-end pb-6">
-          <button
-            onClick={openEditProfileModal}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow transition-colors text-base font-semibold"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487c.637-1.093-.148-2.487-1.392-2.487H8.53c-1.244 0-2.029 1.394-1.392 2.487l.7 1.2A2.25 2.25 0 007.5 7.25v.25c0 .414.336.75.75.75h7.5a.75.75 0 00.75-.75v-.25a2.25 2.25 0 00-.338-1.563l.7-1.2z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75v2.25m0 0a2.25 2.25 0 01-2.25-2.25h4.5a2.25 2.25 0 01-2.25 2.25z" />
-            </svg>
-            Edit Profile
-          </button>
+          <span className="text-base text-gray-500 font-medium mt-0">Teacher</span>
         </div>
       </div>
       {/* Tabs Row */}

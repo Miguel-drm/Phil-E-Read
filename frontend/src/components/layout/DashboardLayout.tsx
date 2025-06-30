@@ -142,7 +142,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <Sidebar
           userRole={userRole}
           isMobile={isMobile}
-          isTablet={isTablet}
           isOpen={sidebarOpen}
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}

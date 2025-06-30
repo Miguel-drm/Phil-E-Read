@@ -29,6 +29,7 @@ import AssignmentsPage from './pages/parent/Assignments';
 import ReportsPage from './pages/parent/Reports';
 import ParentProfilePage from './pages/parent/Profile';
 
+<<<<<<< HEAD
 // Admin Pages
 import AdminReportsPage from './pages/admin/AdminReports';
 import AdminSettingsPage from './pages/admin/AdminSettings';
@@ -113,11 +114,15 @@ const AuthGate: React.FC = () => {
     </Routes>
   );
 };
+=======
+import SyncTeacherProfile from './components/SyncTeacherProfile';
+>>>>>>> origin/Jbranch
 
 const App: React.FC = () => {
   return (
     <Router>
       <AuthProvider>
+        <SyncTeacherProfile />
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<AuthWrapper />} />

@@ -15,7 +15,6 @@ import Tooltip from '@mui/material/Tooltip';
 interface SidebarProps {
   userRole: UserRole | null;
   isMobile?: boolean;
-  isTablet?: boolean;
   isOpen?: boolean;
   isCollapsed?: boolean;
   onToggle?: () => void;
@@ -40,7 +39,6 @@ const iconMap: Record<string, React.ReactNode> = {
 const Sidebar: React.FC<SidebarProps> = ({ 
   userRole,
   isMobile = false,
-  isTablet = false,
   isOpen = true,
   isCollapsed = false,
   onToggle,
