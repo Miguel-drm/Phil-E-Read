@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { EditProfileModalContext } from '../../components/layout/DashboardLayout';
 import axios from 'axios';
 import Cropper from 'react-easy-crop';
+import { ArrowLeftIcon } from '@heroicons/react/24/solid';
 
 const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80'; // Placeholder banner
 
@@ -41,17 +42,21 @@ async function getCroppedImg(imageSrc: string, crop: any) {
   });
 }
 
-const tabs = [
-  'Profile',
-  'Classes',
-  'Students',
-  'Assignments',
-  'Reports',
-  'Reading Sessions',
-  'Settings',
-];
+interface ProfileOverviewProps {
+  teacher?: {
+    displayName?: string;
+    email?: string;
+    phoneNumber?: string;
+    school?: string;
+    gradeLevel?: string;
+    profileImage?: string;
+    bio?: string;
+  };
+  adminView?: boolean;
+  onBack?: () => void;
+}
 
-const ProfileOverview: React.FC = () => {
+const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = false, onBack }) => {
   const { userProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState('Profile');
@@ -98,6 +103,12 @@ const ProfileOverview: React.FC = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+
+  const tabs = adminView
+    ? ['Profile', 'Classes', 'Students', 'Assignments', 'Reports', 'Reading Sessions']
+    : ['Profile', 'Classes', 'Students', 'Assignments', 'Reports', 'Reading Sessions', 'Settings'];
+  // Use teacher prop if adminView, otherwise use userProfile
+  const profile = adminView && teacher ? teacher : userProfile;
 
   React.useEffect(() => {
     if (userProfile) {
@@ -247,6 +258,13 @@ const ProfileOverview: React.FC = () => {
     }
   };
 
+  // Helper to get profile image
+  const getProfileImage = () => {
+    if (adminView && teacher) return teacher.profileImage;
+    if (!adminView && profileImage) return profileImage;
+    return undefined;
+  };
+
   if (!firebaseUid) return <div>Loading...</div>;
 
   return (
@@ -258,6 +276,15 @@ const ProfileOverview: React.FC = () => {
           alt="Profile Banner"
           className="object-cover w-full h-full rounded-t-2xl"
         />
+        {adminView && onBack && (
+          <button
+            className="absolute left-6 top-6 bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-full shadow flex items-center justify-center"
+            onClick={onBack}
+            title="Back to List"
+          >
+            <ArrowLeftIcon className="w-6 h-6" />
+          </button>
+        )}
       </div>
       {/* Profile Header Row: Avatar, Name, Actions */}
       <div className="relative max-w-5xl mx-auto flex items-end px-4 -mt-20 md:-mt-24">
@@ -266,9 +293,9 @@ const ProfileOverview: React.FC = () => {
           {/* Avatar with camera icon */}
           <div className="relative z-10">
             <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden relative">
-              {profileImage ? (
+              {getProfileImage() ? (
                 <img
-                  src={profileImage}
+                  src={getProfileImage()}
                   alt="Profile"
                   className="object-cover w-full h-full rounded-full z-10"
                   style={{ position: 'relative', zIndex: 10 }}
@@ -285,30 +312,34 @@ const ProfileOverview: React.FC = () => {
                 </svg>
               )}
             </div>
-            {/* Camera Icon Overlay */}
-            <button
-              className="absolute -bottom-0 -right-0 bg-gray-100 rounded-full p-2 shadow-md border border-gray-200 hover:bg-gray-200 transition-colors"
-              style={{ zIndex: 999 }}
-              title="Change profile photo"
-              aria-label="Change profile photo"
-              onClick={handleCameraClick}
-              type="button"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-gray-700">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 19.5V6.75A2.25 2.25 0 014.5 4.5h3.379c.414 0 .789.252.937.64l.574 1.53a.75.75 0 00.7.48h4.38a.75.75 0 00.7-.48l.574-1.53a1 1 0 01.937-.64H19.5a2.25 2.25 0 012.25 2.25v12.75a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 19.5z" />
-                <circle cx="12" cy="13" r="3.25" />
-              </svg>
-            </button>
-            <input
-              type="file"
-              accept="image/*"
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            {/* Camera Icon Overlay (hide in adminView) */}
+            {!adminView && (
+              <>
+                <button
+                  className="absolute -bottom-0 -right-0 bg-gray-100 rounded-full p-2 shadow-md border border-gray-200 hover:bg-gray-200 transition-colors"
+                  style={{ zIndex: 999 }}
+                  title="Change profile photo"
+                  aria-label="Change profile photo"
+                  onClick={handleCameraClick}
+                  type="button"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-gray-700">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 19.5V6.75A2.25 2.25 0 014.5 4.5h3.379c.414 0 .789.252.937.64l.574 1.53a.75.75 0 00.7.48h4.38a.75.75 0 00.7-.48l.574-1.53a1 1 0 01.937-.64H19.5a2.25 2.25 0 012.25 2.25v12.75a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 19.5z" />
+                    <circle cx="12" cy="13" r="3.25" />
+                  </svg>
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </>
+            )}
           </div>
-          {/* Cropper Modal */}
-          {showCropModal && (
+          {/* Cropper Modal (hide in adminView) */}
+          {!adminView && showCropModal && (
             <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60">
               <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-4xl relative flex flex-col items-center">
                 <h3 className="text-lg font-semibold mb-4">Crop Image</h3>
@@ -335,18 +366,21 @@ const ProfileOverview: React.FC = () => {
         <div className="flex flex-col justify-end ml-6 pb-4 flex-1">
           <div className="flex items-center">
             <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight mb-0">
-              {userProfile?.displayName || '-'}
+              {profile?.displayName || '-'}
             </h2>
-            <button
-              onClick={openEditProfileModal}
-              className="ml-60 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow transition-colors text-base font-semibold"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487c.637-1.093-.148-2.487-1.392-2.487H8.53c-1.244 0-2.029 1.394-1.392 2.487l.7 1.2A2.25 2.25 0 007.5 7.25v.25c0 .414.336.75.75.75h7.5a.75.75 0 00.75-.75v-.25a2.25 2.25 0 00-.338-1.563l.7-1.2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75v2.25m0 0a2.25 2.25 0 01-2.25-2.25h4.5a2.25 2.25 0 01-2.25 2.25z" />
-              </svg>
-              Edit Profile
-            </button>
+            {/* Edit Profile button (hide in adminView) */}
+            {!adminView && (
+              <button
+                onClick={openEditProfileModal}
+                className="ml-60 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow transition-colors text-base font-semibold"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487c.637-1.093-.148-2.487-1.392-2.487H8.53c-1.244 0-2.029 1.394-1.392 2.487l.7 1.2A2.25 2.25 0 007.5 7.25v.25c0 .414.336.75.75.75h7.5a.75.75 0 00.75-.75v-.25a2.25 2.25 0 00-.338-1.563l.7-1.2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75v2.25m0 0a2.25 2.25 0 01-2.25-2.25h4.5a2.25 2.25 0 01-2.25 2.25z" />
+                </svg>
+                Edit Profile
+              </button>
+            )}
           </div>
           <span className="text-base text-gray-500 font-medium mt-0">Teacher</span>
         </div>
@@ -367,7 +401,7 @@ const ProfileOverview: React.FC = () => {
       </div>
       {/* Profile Summary Card or Settings Form */}
       <div className="w-full max-w-5xl mx-auto mt-8 px-4">
-        {activeTab === 'Settings' ? (
+        {activeTab === 'Settings' && !adminView ? (
           <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 flex flex-col gap-8 border border-blue-100">
             {/* Settings Tabs */}
             <div className="border-b border-gray-200 mb-6">
@@ -602,21 +636,21 @@ const ProfileOverview: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
-                    <div className="text-lg font-bold text-gray-900">{userProfile?.phoneNumber || '-'}</div>
+                    <div className="text-lg font-bold text-gray-900">{profile?.phoneNumber || '-'}</div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">School</label>
-                    <div className="text-lg font-bold text-gray-900">{userProfile?.school || '-'}</div>
+                    <div className="text-lg font-bold text-gray-900">{profile?.school || '-'}</div>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Grade Level</label>
-                    <div className="text-lg font-bold text-gray-900">{userProfile?.gradeLevel || '-'}</div>
+                    <div className="text-lg font-bold text-gray-900">{profile?.gradeLevel || '-'}</div>
                   </div>
                 </div>
               </div>
-              {userProfile?.bio && (
+              {profile?.bio && (
                 <div className="bg-white rounded-3xl shadow-2xl p-8 mt-6 border border-blue-100">
-                  <div className="text-base text-gray-700 whitespace-pre-line">{userProfile.bio}</div>
+                  <div className="text-base text-gray-700 whitespace-pre-line">{profile.bio}</div>
                 </div>
               )}
             </>
