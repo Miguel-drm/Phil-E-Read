@@ -4,7 +4,7 @@ import EditTeacherDetailsModal from '../../components/admin/EditTeacherDetailsMo
 import { Menu } from '@headlessui/react';
 import { EllipsisVerticalIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid';
 import ConfirmDeleteModal from '../../components/admin/ConfirmDeleteModal';
-import ProfileOverview from '../../pages/teacher/ProfileOverview';
+import Loader from '../../components/Loader';
 
 interface Teacher {
   id: string;
@@ -109,17 +109,58 @@ const Teachers: React.FC = () => {
   return (
     <div className="p-8">
       {viewTeacher ? (
-        <ProfileOverview teacher={viewTeacher} adminView={true} onBack={() => setViewTeacher(null)} />
+        <div className="bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] p-2 sm:p-6">
+          <div className="flex justify-between mb-4 items-center">
+            <h2 className="text-2xl font-bold text-gray-800">Teacher Details</h2>
+            <button
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-full shadow flex items-center justify-center"
+              onClick={() => setViewTeacher(null)}
+              title="Back"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
+              <p><span className="font-medium text-gray-900">Name:</span> {viewTeacher.displayName || 'N/A'}</p>
+              <p><span className="font-medium text-gray-900">Email:</span> {viewTeacher.email || 'N/A'}</p>
+              <p><span className="font-medium text-gray-900">Phone:</span> {viewTeacher.phoneNumber || 'N/A'}</p>
+              <p><span className="font-medium text-gray-900">School:</span> {viewTeacher.school || 'N/A'}</p>
+              <p><span className="font-medium text-gray-900">Grade Level:</span> {viewTeacher.gradeLevel || 'N/A'}</p>
+            </div>
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Profile Image</h3>
+              {viewTeacher.profileImage ? (
+                <img src={viewTeacher.profileImage} alt={viewTeacher.displayName || 'Profile'} className="w-full h-40 object-cover rounded-lg" />
+              ) : (
+                <div className="w-full h-40 bg-gray-200 flex items-center justify-center rounded-lg text-gray-500">No Image</div>
+              )}
+            </div>
+          </div>
+        </div>
       ) : loading ? (
-        <div className="text-gray-500">Loading...</div>
+        <Loader label="Loading teachers..." />
       ) : error ? (
         <div className="text-red-500">{error}</div>
       ) : teachers.length === 0 ? (
         <div className="text-gray-500">No teachers found.</div>
       ) : (
-        <div className="overflow-x-auto">
           <div className="bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] p-2 sm:p-6">
-            <div className="flex justify-end mb-4 gap-2 items-center relative">
+          <div className="flex justify-between mb-4 items-center">
+            <h2 className="text-2xl font-bold text-gray-800">Teachers</h2>
+          </div>
+          <div className="overflow-visible">
+            <table className="min-w-full rounded-2xl">
+              <thead>
+                <tr className="bg-white shadow-sm rounded-t-2xl sticky top-0 z-10">
+                  <th className="px-6 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider rounded-tl-2xl border-b border-gray-200">Name</th>
+                  <th className="px-6 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200">School</th>
+                  <th className="px-6 py-5 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200">Grade Level</th>
+                  <th className="px-6 py-5 text-right text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200" colSpan={2}>
+                    <div className="flex justify-end items-center gap-2">
               <button
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-full shadow flex items-center justify-center"
                 onClick={() => setFilterOpen(f => !f)}
@@ -137,7 +178,7 @@ const Teachers: React.FC = () => {
               {searchOpen && (
                 <input
                   type="text"
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 transition-all duration-150"
+                          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 transition-all duration-150 ml-2"
                   placeholder="Search by name..."
                   value={searchValue}
                   onChange={e => setSearchValue(e.target.value)}
@@ -175,13 +216,7 @@ const Teachers: React.FC = () => {
               )}
               <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-lg shadow transition-all duration-150">+ Add Teacher</button>
             </div>
-            <table className="min-w-full rounded-2xl">
-              <thead>
-                <tr className="bg-white shadow-sm rounded-t-2xl sticky top-0 z-10">
-                  <th className="px-6 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider rounded-tl-2xl border-b border-gray-200">Name</th>
-                  <th className="px-6 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200">School</th>
-                  <th className="px-6 py-5 text-center text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200">Grade Level</th>
-                  <th className="px-6 py-5 text-right text-sm font-bold text-gray-700 uppercase tracking-wider rounded-tr-2xl border-b border-gray-200">Actions</th>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -256,7 +291,7 @@ const Teachers: React.FC = () => {
 
       <ConfirmDeleteModal
         isOpen={isDeleteModalOpen}
-        onClose={() => { setIsDeleteModalOpen(false); setTeacherToDelete(null); }}
+        onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
         loading={actionLoading}
         message={teacherToDelete ? `Are you sure you want to delete ${teacherToDelete.displayName || teacherToDelete.email || 'this teacher'}? This action cannot be undone.` : ''}

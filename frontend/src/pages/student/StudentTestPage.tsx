@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import Loader from '../../components/Loader';
 
 // Confetti component for celebration
 const Confetti: React.FC = () => (
@@ -200,7 +201,7 @@ const StudentTestPage: React.FC = () => {
 
   if (!test) return (
     <div className="flex justify-center items-center min-h-screen w-full bg-gradient-to-br from-purple-900 to-fuchsia-700">
-      <div className="text-2xl font-bold text-blue-200 animate-pulse">Loading Test...</div>
+      <Loader label="Loading test..." />
     </div>
   );
 

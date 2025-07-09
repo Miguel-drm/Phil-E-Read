@@ -11,7 +11,7 @@ interface ConfirmDeleteModalProps {
 const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({ isOpen, onClose, onConfirm, message, loading }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4 text-center">Confirm Delete</h2>
         <p className="text-gray-600 mb-8 text-center">{message || 'Are you sure you want to delete this item? This action cannot be undone.'}</p>

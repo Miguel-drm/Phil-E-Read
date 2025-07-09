@@ -3,11 +3,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { studentService, type Student, type ImportedStudent } from '../../services/studentService';
 import { gradeService, type ClassGrade } from '../../services/gradeService';
 import * as XLSX from 'xlsx';
-import { showInfo, showError, showSuccess, showConfirmation } from '../../services/alertService';
+import { showError, showSuccess, showConfirmation } from '../../services/alertService';
 import Swal from 'sweetalert2';
-import { serverTimestamp, onSnapshot, collection, doc } from 'firebase/firestore';
+import { onSnapshot, collection } from 'firebase/firestore';
 import { getAllParents } from '../../services/authService';
 import { db } from '../../config/firebase';
+import Loader from '../../components/Loader';
 
 const ClassList: React.FC = () => {
   const { currentUser, userRole, isProfileComplete } = useAuth();
@@ -20,17 +21,6 @@ const ClassList: React.FC = () => {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [importedStudents, setImportedStudents] = useState<ImportedStudent[]>([]);
   const [showImportPreview, setShowImportPreview] = useState(false);
-  const [classStats, setClassStats] = useState({
-    totalStudents: 0,
-    excellentPerformers: 0
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [grades, setGrades] = useState<ClassGrade[]>([]);
-  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
-  const [selectedGrade, setSelectedGrade] = useState<string>('all');
-  const [isCreateGradeModalOpen, setIsCreateGradeModalOpen] = useState(false);
-  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
-  const [deletingGradeId, setDeletingGradeId] = useState<string | null>(null);
   const [loadingStudentId, setLoadingStudentId] = useState<string | null>(null);
   const [loadingViewGradeId, setLoadingViewGradeId] = useState<string | null>(null);
   const [loadingAddStudentToGradeId, setLoadingAddStudentToGradeId] = useState<string | null>(null);
@@ -38,7 +28,11 @@ const ClassList: React.FC = () => {
   const [deletingAllStudents, setDeletingAllStudents] = useState(false);
   const [isCreatingGrade, setIsCreatingGrade] = useState(false);
   const [isAddingStudentToGrade, setIsAddingStudentToGrade] = useState(false);
-  const [isDeletingSelectedGrades, setIsDeletingSelectedGrades] = useState(false);
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [deletingGradeId, setDeletingGradeId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [grades, setGrades] = useState<ClassGrade[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState<string>('all');
 
   // Helper function to check if the current user has management permissions
   const canManage = (userRole === 'teacher' || userRole === 'admin') && isProfileComplete;
@@ -72,10 +66,8 @@ const ClassList: React.FC = () => {
 
   const loadClassStatistics = async () => {
     if (!currentUser?.uid) return;
-    
     try {
-      const stats = await studentService.getClassStatistics(currentUser.uid);
-      setClassStats(stats);
+      // Removed unused stats variable
     } catch (error) {
       console.error('Error loading class statistics:', error);
     }
@@ -266,14 +258,6 @@ const ClassList: React.FC = () => {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
-  const handleAddStudent = async () => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
   const handleEditStudent = async (studentId: string) => {
     setLoadingStudentId(studentId);
     try {
@@ -360,22 +344,6 @@ const ClassList: React.FC = () => {
     }
   };
 
-  const handleContactParent = (studentId: string, parentEmail: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
-  const handleExportStudentData = async (studentId: string, studentName: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
-  const handleMarkAttendance = async (studentId: string, studentName: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
-  const handleViewHistory = async (studentId: string, studentName: string) => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
   const handleDeleteAllStudents = async () => {
     const result = await showConfirmation(
       'Delete All Students',
@@ -456,10 +424,6 @@ const ClassList: React.FC = () => {
     }
   };
 
-  const handleExportClassList = async () => {
-    // No need to call showInfo here, as it's not used in the new implementation
-  };
-
   const getPerformanceColor = (performance: string) => {
     switch (performance) {
       case 'Excellent':
@@ -476,7 +440,6 @@ const ClassList: React.FC = () => {
   // Load grades and their student counts
   const loadGrades = async () => {
     if (!currentUser?.uid) return;
-    setIsLoadingGrades(true);
     try {
       console.log('Starting to load grades...');
       const gradesData = await gradeService.getGradesByTeacher(currentUser.uid); // Only show classes for the current teacher
@@ -516,92 +479,6 @@ const ClassList: React.FC = () => {
     } catch (error) {
       console.error('Error loading grades:', error);
       setGrades([]);
-    } finally {
-      setIsLoadingGrades(false);
-    }
-  };
-
-  // Test Firestore connection
-  const testFirestoreConnection = async () => {
-    try {
-      console.log('Testing Firestore connection...');
-      const testData = await gradeService.getAllGrades();
-      console.log('Firestore connection successful. Total grades:', testData.length);
-      
-      return true;
-    } catch (error) {
-      console.error('Firestore connection test failed:', error);
-      return false;
-    }
-  };
-
-  // Initialize sample grades if none exist
-  const initializeSampleGrades = async () => {
-    try {
-      const sampleGrades = [
-        {
-          name: "Grade 1",
-          description: "First grade students - ages 6-7",
-          ageRange: "6-7 years",
-          studentCount: 15,
-          color: "blue",
-          isActive: true,
-          teacherId: "default"
-        },
-        {
-          name: "Grade 2",
-          description: "Second grade students - ages 7-8",
-          ageRange: "7-8 years",
-          studentCount: 18,
-          color: "green",
-          isActive: true,
-          teacherId: "default"
-        },
-        {
-          name: "Grade 3",
-          description: "Third grade students - ages 8-9",
-          ageRange: "8-9 years",
-          studentCount: 16,
-          color: "yellow",
-          isActive: true,
-          teacherId: "default"
-        },
-        {
-          name: "Grade 4",
-          description: "Fourth grade students - ages 9-10",
-          ageRange: "9-10 years",
-          studentCount: 14,
-          color: "purple",
-          isActive: true,
-          teacherId: "default"
-        },
-        {
-          name: "Grade 5",
-          description: "Fifth grade students - ages 10-11",
-          ageRange: "10-11 years",
-          studentCount: 17,
-          color: "red",
-          isActive: true,
-          teacherId: "default"
-        },
-        {
-          name: "Grade 6",
-          description: "Sixth grade students - ages 11-12",
-          ageRange: "11-12 years",
-          studentCount: 12,
-          color: "gray",
-          isActive: true,
-          teacherId: "default"
-        }
-      ];
-
-      for (const gradeData of sampleGrades) {
-        await gradeService.createGrade(gradeData);
-      }
-
-      await loadGrades();
-    } catch (error) {
-      console.error('Error initializing grades:', error);
     }
   };
 
@@ -892,19 +769,6 @@ const ClassList: React.FC = () => {
     return badgeMap[color] || badgeMap.blue;
   };
 
-  // Get text color classes
-  const getTextColorClasses = (color: string) => {
-    const textMap: { [key: string]: string } = {
-      blue: 'text-blue-700',
-      green: 'text-green-700',
-      yellow: 'text-yellow-700',
-      purple: 'text-purple-700',
-      red: 'text-red-700',
-      gray: 'text-gray-700'
-    };
-    return textMap[color] || textMap.blue;
-  };
-
   // Load grades on component mount
   useEffect(() => {
     loadGrades();
@@ -931,17 +795,6 @@ const ClassList: React.FC = () => {
     }
   }, [grades, students]);
 
-  const handleGradeDotClick = (e: React.MouseEvent, gradeId: string) => {
-    e.stopPropagation();
-    setSelectedGrades(prev => {
-      if (prev.includes(gradeId)) {
-        return prev.filter(id => id !== gradeId);
-      } else {
-        return [...prev, gradeId];
-      }
-    });
-  };
-
   const handleDeleteSelectedGrades = async () => {
     if (selectedGrades.length === 0) return;
 
@@ -961,7 +814,6 @@ const ClassList: React.FC = () => {
       email: p.email || '',
     }));
 
-    let search = '';
     let filteredParents = parents;
 
     const renderParentList = (searchValue: string) => {
@@ -1225,13 +1077,9 @@ const ClassList: React.FC = () => {
                       onClick={handleDeleteSelectedGrades}
                       className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 shadow focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 transition"
                       title={`Delete ${selectedGrades.length} selected grade(s)`}
-                      disabled={isDeletingSelectedGrades || !canManage}
+                      disabled={!canManage}
                     >
-                      {isDeletingSelectedGrades ? (
-                        <span className="loader-spinner" style={{ display: 'inline-block', width: 18, height: 18, border: '2px solid #f3f3f3', borderTop: '2px solid #ef4444', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                      ) : (
-                        <i className="fas fa-trash text-lg"></i>
-                      )}
+                      <i className="fas fa-trash text-lg"></i>
                     </button>
                   )}
                   <button
@@ -1530,7 +1378,7 @@ const ClassList: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="ml-3">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className="text-sm font-medium text-gray-900 select-none">
                                     {(() => {
                                       const studentFullName = student.name || '';
                                       if (studentFullName.includes(' ')) {
@@ -1543,18 +1391,21 @@ const ClassList: React.FC = () => {
                               </div>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">{student.grade}</div>
+                              <div className="text-sm text-gray-900 select-none">{student.grade}</div>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center">
-                              <div className="flex items-center justify-center">
+                            <td className="px-4 py-3 whitespace-nowrap text-left align-middle">
+                              <div className="flex items-center h-8">
                                 {student.parentId ? (
-                                  <span className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                  <span
+                                    className="px-2 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded-full cursor-default select-none"
+                                    title={student.parentName || "Parent linked"}
+                                  >
                                     Linked
                                   </span>
                                 ) : (
                                   <button
                                     onClick={() => student.id && handleLinkParent(student.id)}
-                                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer select-none"
                                   >
                                     <><i className="fas fa-link mr-1.5"></i>Link Parent</>
                                   </button>
@@ -1562,7 +1413,7 @@ const ClassList: React.FC = () => {
                               </div>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)}`}>
+                              <span className={`px-1.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getPerformanceColor(student.performance)} select-none`}>
                                 {student.performance}
                               </span>
                             </td>
@@ -1570,7 +1421,7 @@ const ClassList: React.FC = () => {
                               <div className="flex justify-end space-x-2">
                                 <button
                                   onClick={() => student.id && handleViewProfile(student.id)}
-                                  className="text-blue-600 hover:text-blue-900"
+                                  className="text-blue-600 hover:text-blue-900 select-none"
                                   title="View Profile"
                                   disabled={loadingStudentId === student.id || !canManage}
                                 >
@@ -1582,7 +1433,7 @@ const ClassList: React.FC = () => {
                                 </button>
                                 <button
                                   onClick={() => student.id && handleEditStudent(student.id)}
-                                  className="text-indigo-600 hover:text-indigo-900"
+                                  className="text-indigo-600 hover:text-indigo-900 select-none"
                                   title="Edit Student"
                                   disabled={!canManage}
                                 >
@@ -1590,7 +1441,7 @@ const ClassList: React.FC = () => {
                                 </button>
                                 <button
                                   onClick={() => student.id && handleDeleteStudent(student.id, student.name)}
-                                  className="text-red-600 hover:text-red-900"
+                                  className="text-red-600 hover:text-red-900 select-none"
                                   title="Delete Student"
                                   disabled={!canManage}
                                 >

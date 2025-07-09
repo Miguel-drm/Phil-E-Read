@@ -3,7 +3,6 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
-  deleteDoc, 
   getDocs, 
   getDoc, 
   query, 
@@ -11,8 +10,7 @@ import {
   orderBy, 
   limit,
   writeBatch,
-  serverTimestamp,
-  onSnapshot
+  serverTimestamp
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../config/firebase';
@@ -176,7 +174,9 @@ class StudentService {
       console.log('Student data:', studentData);
 
       // Verify the current user owns this student record
-      if (studentData.teacherId !== auth.currentUser.uid) {
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      const userRole = userDoc.data()?.role;
+      if (studentData.teacherId !== auth.currentUser.uid && userRole !== 'admin') {
         throw new Error('Unauthorized to delete this student');
       }
 

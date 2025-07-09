@@ -390,14 +390,14 @@ class GradeService {
     }
   }
 
-  async getStudentsByGrade(gradeId: string): Promise<StudentServiceModule.Student[]> {
+  async getStudentsByGrade(gradeId: string): Promise<(StudentServiceModule.Student & { studentId: string })[]> {
     try {
       const studentsCollectionRef = collection(db, this.collectionName, gradeId, 'students');
       const querySnapshot = await getDocs(studentsCollectionRef);
       return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as StudentServiceModule.Student[];
+        ...doc.data(),
+        studentId: doc.id
+      })) as (StudentServiceModule.Student & { studentId: string })[];
     } catch (error) {
       console.error(`Error getting students for grade ${gradeId}:`, error);
       throw new Error(`Failed to fetch students for grade ${gradeId}`);

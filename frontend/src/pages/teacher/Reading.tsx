@@ -12,6 +12,7 @@ import {
   PencilIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import Loader from '../../components/Loader';
 
 const sessionColors = [
   'from-blue-50 to-indigo-50 border-blue-200 text-blue-900',
@@ -637,7 +638,7 @@ const Reading: React.FC = () => {
         {activeTab === 'stories' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 md:gap-6">
             {storiesLoading ? (
-              <div className="col-span-full text-center py-10">Loading stories...</div>
+              <Loader label="Loading stories..." />
             ) : storiesError ? (
               <div className="col-span-full text-center py-10 text-red-500">{storiesError}</div>
             ) : stories.length === 0 ? (

@@ -28,6 +28,7 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
     gradeLevel: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<{ phoneNumber?: string; school?: string; gradeLevel?: string }>({});
 
   useEffect(() => {
     if (teacher) {
@@ -42,9 +43,34 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
     }
   }, [teacher]);
 
+  const validateFields = (data: Teacher) => {
+    const newErrors: { phoneNumber?: string; school?: string; gradeLevel?: string } = {};
+    if (data.phoneNumber && !/^\d*$/.test(data.phoneNumber)) {
+      newErrors.phoneNumber = 'Phone number must contain numbers only.';
+    }
+    if (data.school && /\d/.test(data.school)) {
+      newErrors.school = 'School name cannot contain numbers.';
+    }
+    if (data.gradeLevel && !/^\d*$/.test(data.gradeLevel)) {
+      newErrors.gradeLevel = 'Grade level must be a number.';
+    }
+    return newErrors;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setProfileData(prev => ({ ...prev, [name]: value }));
+    let filteredValue = value;
+    if (name === 'phoneNumber') {
+      filteredValue = value.replace(/[^\d]/g, '');
+    }
+    if (name === 'school') {
+      filteredValue = value.replace(/\d/g, '');
+    }
+    if (name === 'gradeLevel') {
+      filteredValue = value.replace(/[^\d]/g, '');
+    }
+    setProfileData(prev => ({ ...prev, [name]: filteredValue }));
+    setErrors(validateFields({ ...profileData, [name]: filteredValue }));
   };
 
   const handleSave = async () => {
@@ -119,9 +145,11 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
               onChange={handleInputChange}
               disabled={isSaving}
               placeholder="N/A"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className={`w-full border ${errors.phoneNumber ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
             />
-            {!isSaving && !profileData.phoneNumber && <p className="text-xs text-gray-500 mt-1">Will display as N/A if empty</p>}
+            {errors.phoneNumber && <p className="text-xs text-red-500 mt-1">{errors.phoneNumber}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">School</label>
@@ -132,9 +160,9 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
               onChange={handleInputChange}
               disabled={isSaving}
               placeholder="N/A"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+              className={`w-full border ${errors.school ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
             />
-            {!isSaving && !profileData.school && <p className="text-xs text-gray-500 mt-1">Will display as N/A if empty</p>}
+            {errors.school && <p className="text-xs text-red-500 mt-1">{errors.school}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
@@ -145,9 +173,11 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
               onChange={handleInputChange}
               disabled={isSaving}
               placeholder="N/A"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className={`w-full border ${errors.gradeLevel ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
             />
-            {!isSaving && !profileData.gradeLevel && <p className="text-xs text-gray-500 mt-1">Will display as N/A if empty</p>}
+            {errors.gradeLevel && <p className="text-xs text-red-500 mt-1">{errors.gradeLevel}</p>}
           </div>
         </div>
         <div className="flex justify-end space-x-3">
@@ -160,7 +190,7 @@ const EditTeacherDetailsModal: React.FC<EditTeacherDetailsModalProps> = ({ isOpe
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || Object.keys(errors).length > 0 && Object.values(errors).some(Boolean)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             {isSaving ? (

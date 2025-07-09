@@ -44,16 +44,6 @@ export class UnifiedStoryService {
     return normalizedLanguage;
   }
 
-  private async fileToBuffer(file: File): Promise<FileBuffer> {
-    const arrayBuffer = await file.arrayBuffer();
-    return {
-      buffer: arrayBuffer,
-      originalname: file.name,
-      mimetype: file.type,
-      size: file.size
-    };
-  }
-
   public async createStory(storyData: Partial<Story>, file: File | FileBuffer): Promise<Story> {
     try {
       // Create FormData for file upload

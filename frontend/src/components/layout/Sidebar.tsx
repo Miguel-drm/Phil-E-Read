@@ -32,8 +32,10 @@ const iconMap: Record<string, React.ReactNode> = {
   assignments: <TaskIcon fontSize="medium" />,
   teachers: <SchoolIcon fontSize="medium" />,
   students: <PersonIcon fontSize="medium" />,
+  parents: <GroupIcon fontSize="medium" />,
   settings: <SettingsIcon fontSize="medium" />,
-  stories: <MenuBookIcon fontSize="medium" />
+  stories: <MenuBookIcon fontSize="medium" />,
+  children: <GroupIcon fontSize="medium" /> // Added for My Children
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -57,9 +59,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           { path: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
           { path: '/admin/teachers', label: 'Teachers', icon: 'teachers' },
           { path: '/admin/students', label: 'Students', icon: 'students' },
+          { path: '/admin/parents', label: 'Parents', icon: 'parents' },
           { path: '/admin/reports', label: 'Reports', icon: 'reports' },
           { path: '/admin/stories', label: 'Stories', icon: 'stories' },
-          { path: '/admin/settings', label: 'Settings', icon: 'settings' }
+          { path: '/admin/profile', label: 'Profile', icon: 'profile' }
         ];
       case 'teacher':
         return [
@@ -73,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'parent':
         return [
           { path: '/parent/dashboard', label: 'Dashboard', icon: 'dashboard' },
-          { path: '/parent/children', label: 'My Children', icon: 'students' },
+          { path: '/parent/children', label: 'My Children', icon: 'children' },
           { path: '/parent/progress', label: 'Progress', icon: 'progress' },
           { path: '/parent/assignments', label: 'Assignments', icon: 'assignments' },
           { path: '/parent/reports', label: 'Reports', icon: 'reports' },

@@ -11,28 +11,37 @@ interface PerformanceChartProps {
   };
   grades: ClassGrade[];
   students: Student[];
-  isLoading: boolean;
 }
 
-const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, students, isLoading }) => {
+const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, students }) => {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedStudent, setSelectedStudent] = useState<string>('');
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
 
+  const safeData = {
+    weeks: Array.isArray(data?.weeks) ? data.weeks : [],
+    studentScores: Array.isArray(data?.studentScores) ? data.studentScores : [],
+    classAverages: Array.isArray(data?.classAverages) ? data.classAverages : [],
+  };
+  const safeGrades = Array.isArray(grades) ? grades : [];
+  const safeStudents = Array.isArray(students) ? students : [];
+
   // Default to first grade if available
   useEffect(() => {
-    if (grades.length > 0 && !selectedGrade) {
+    if (Array.isArray(grades) && grades.length > 0 && !selectedGrade) {
       setSelectedGrade(grades[0].id || '');
     }
-  }, [grades, selectedGrade]);
+    // Only depend on grades to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grades]);
 
   useEffect(() => {
     if (selectedGrade) {
-      const grade = grades.find(g => g.id === selectedGrade);
+      const grade = safeGrades.find(g => g.id === selectedGrade);
       if (grade) {
-        setFilteredStudents(students.filter(s => s.grade === grade.name));
+        setFilteredStudents(safeStudents.filter(s => s.grade === grade.name));
       } else {
         setFilteredStudents([]);
       }
@@ -40,7 +49,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
       setFilteredStudents([]);
     }
     setSelectedStudent('');
-  }, [selectedGrade, students, grades]);
+  }, [selectedGrade, safeStudents, safeGrades]);
 
   useEffect(() => {
     if (chartRef.current) {
@@ -89,7 +98,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
         xAxis: {
           type: 'category',
           boundaryGap: false,
-          data: data.weeks,
+          data: safeData.weeks,
           axisLabel: {
             fontSize: 11,
             color: '#6b7280',
@@ -130,7 +139,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
           {
             name: 'Average Score',
             type: 'line',
-            data: data.studentScores,
+            data: safeData.studentScores,
             smooth: true,
             symbol: 'circle',
             symbolSize: 8,
@@ -160,7 +169,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
           {
             name: 'Class Average',
             type: 'line',
-            data: data.classAverages,
+            data: safeData.classAverages,
             smooth: true,
             symbol: 'circle',
             symbolSize: 8,
@@ -212,8 +221,8 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
               onChange={(e) => setSelectedGrade(e.target.value)}
               className="px-2 py-1 text-xs border rounded-md"
             >
-              {grades.length === 0 && <option value="">No Classes</option>}
-              {grades.map((grade) => (
+              {safeGrades.length === 0 && <option value="">No Classes</option>}
+              {safeGrades.map((grade) => (
                 <option key={grade.id} value={grade.id}>{grade.name}</option>
               ))}
             </select>
@@ -224,7 +233,7 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data, grades, stude
               disabled={!selectedGrade}
             >
               <option value="">Select Student</option>
-              {filteredStudents.map((student) => (
+              {(Array.isArray(filteredStudents) ? filteredStudents : []).map((student) => (
                 <option key={student.id} value={student.id}>{student.name.replace(' | ', ' ')}</option>
               ))}
             </select>

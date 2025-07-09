@@ -1,9 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { showSuccess, showError } from '../../services/alertService';
 import Cropper from 'react-easy-crop';
+import { updateUserProfile } from '../../services/authService';
+import { BannerContext } from '../../components/layout/DashboardLayout';
 
 const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80';
+
+const defaultBanners = [
+  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80',
+];
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -46,13 +55,14 @@ async function getCroppedImg(imageSrc: string, crop: any) {
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
-  const { userProfile, currentUser } = useAuth();
+  const { userProfile, currentUser, refreshUserProfile } = useAuth();
   const firebaseUid = currentUser?.uid;
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const [editBanner, setEditBanner] = useState<string>(bannerUrl);
   const [editBio, setEditBio] = useState(userProfile?.bio || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [errors, setErrors] = useState<{ phoneNumber?: string; school?: string; gradeLevel?: string }>({});
 
   // Cropper modal state
   const [showCropModal, setShowCropModal] = useState(false);
@@ -60,6 +70,18 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+
+  // Add local state for editing profile fields
+  const [editProfile, setEditProfile] = useState({
+    phoneNumber: userProfile?.phoneNumber || '',
+    school: userProfile?.school || '',
+    gradeLevel: userProfile?.gradeLevel || '',
+  });
+
+  // Add new state for banner picker
+  const [showBannerPicker, setShowBannerPicker] = useState(false);
+
+  const { banner, setBanner } = useContext(BannerContext);
 
   // Fetch current profile image from backend when modal opens
   useEffect(() => {
@@ -123,9 +145,6 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
       setEditBanner(URL.createObjectURL(file));
     }
   };
-  const handleResetBanner = () => {
-    setEditBanner(bannerUrl);
-  };
   const handleEditCancel = () => {
     onClose();
     setEditAvatar(undefined);
@@ -134,6 +153,8 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
     setAvatarFile(null);
   };
   const handleEditSave = async () => {
+    console.log('Save button clicked');
+    console.log('editBanner value:', editBanner);
     setSavingEdit(true);
     try {
       // 1. Upload avatar image if changed
@@ -162,9 +183,23 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           return;
         }
       }
-      // Optionally: handle banner and bio update here if needed
-      showSuccess('Profile Updated', 'Your profile image has been updated!');
-      onClose();
+      // Save banner and other profile info, removing undefined values
+      console.log('Saving banner:', editBanner);
+      const profileToSave = {
+        ...userProfile,
+        banner: editBanner,
+        bio: editBio,
+        phoneNumber: editProfile.phoneNumber,
+        school: editProfile.school,
+        gradeLevel: editProfile.gradeLevel,
+      };
+      console.log('profileToSave:', profileToSave);
+      await updateUserProfile(profileToSave);
+      await refreshUserProfile();
+      showSuccess('Profile Updated', 'Your profile has been updated!');
+      setTimeout(() => {
+        onClose();
+      }, 100);
     } catch (err: any) {
       showError('Upload failed', err.message);
     } finally {
@@ -179,18 +214,42 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
     }
   };
 
+  const validateFields = (data: typeof editProfile) => {
+    const newErrors: { phoneNumber?: string; school?: string; gradeLevel?: string } = {};
+    if (data && data.phoneNumber && !/^\d*$/.test(data.phoneNumber)) {
+      newErrors.phoneNumber = 'Phone number must contain numbers only.';
+    }
+    if (data && data.school && /\d/.test(data.school)) {
+      newErrors.school = 'School name cannot contain numbers.';
+    }
+    if (data && data.gradeLevel && !/^\d*$/.test(data.gradeLevel)) {
+      newErrors.gradeLevel = 'Grade level must be a number.';
+    }
+    return newErrors;
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    let filteredValue = value;
+    if (name === 'phoneNumber') filteredValue = value.replace(/[^\d]/g, '');
+    if (name === 'school') filteredValue = value.replace(/\d/g, '');
+    if (name === 'gradeLevel') filteredValue = value.replace(/[^\d]/g, '');
+    setEditProfile(prev => ({ ...prev, [name]: filteredValue }));
+    setErrors(validateFields({ ...editProfile, [name]: filteredValue }));
+  };
+
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60"
       onClick={handleOverlayClick}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="flex items-center justify-between bg-white rounded-t-2xl px-8 py-5 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Edit Profile</h2>
           <button className="text-gray-400 text-2xl font-bold hover:text-gray-700 transition-colors" onClick={handleEditCancel} aria-label='Close'>&times;</button>
         </div>
-        <div className="p-8 pt-4">
+        <div className="p-4 pt-2 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-blue-300 scrollbar-track-blue-100" style={{ maxHeight: '70vh' }}>
           {/* Profile Picture */}
           <div className="flex flex-col items-center mb-6 mt-2">
             <div className="relative w-28 h-28 mb-2">
@@ -248,7 +307,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
           <div className="mb-6">
             <div className="relative w-full h-24 rounded-xl overflow-hidden mb-2">
               <img
-                src={editBanner}
+                src={banner}
                 alt="Banner Preview"
                 className="object-cover w-full h-full"
                 style={{ background: '#e0e7ef' }}
@@ -260,10 +319,51 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
                   <circle cx="12" cy="13" r="3.25" />
                 </svg>
               </label>
-              <button className="absolute top-2 right-2 bg-white rounded-full px-3 py-1 text-xs text-gray-600 border border-gray-200 shadow hover:bg-gray-100" onClick={handleResetBanner}>Reset</button>
+              <button
+                className="absolute top-2 right-2 bg-white rounded-full px-3 py-1 text-xs text-gray-600 border border-gray-200 shadow hover:bg-blue-100 transition-colors"
+                onClick={() => setShowBannerPicker(true)}
+                type="button"
+              >
+                Choose
+              </button>
             </div>
             <span className="text-sm text-gray-500">Change Banner</span>
           </div>
+          {/* Banner Picker Modal */}
+          {showBannerPicker && (
+            <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black bg-opacity-40">
+              <div className="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full flex flex-col gap-4">
+                <h3 className="text-lg font-semibold mb-2">Choose a Background</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {defaultBanners.map((url, idx) => (
+                    <button
+                      key={url}
+                      className={`relative rounded-lg overflow-hidden border-2 transition-all ${banner === url ? 'border-blue-600 ring-2 ring-blue-300' : 'border-transparent hover:border-blue-400 focus:border-blue-600'}`}
+                      onClick={() => { setBanner(url); setEditBanner(url); setShowBannerPicker(false); }}
+                      type="button"
+                    >
+                      <img
+                        src={url}
+                        alt={`Default banner ${idx + 1}`}
+                        className="w-full h-24 object-cover"
+                        onError={e => { e.currentTarget.src = 'https://via.placeholder.com/400x96?text=Image+not+found'; }}
+                      />
+                      {banner === url && (
+                        <span className="absolute top-2 left-2 bg-blue-600 text-white rounded-full p-1 text-xs font-bold shadow">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="mt-4 px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors self-end"
+                  onClick={() => setShowBannerPicker(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {/* Bio */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
@@ -276,23 +376,66 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) 
             />
             <div className="text-xs text-gray-400 text-right mt-1">{editBio.length}/300</div>
           </div>
-          {/* Actions */}
-          <div className="flex justify-end gap-3 mt-8">
-            <button
-              className="px-5 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
-              onClick={handleEditCancel}
+          {/* Phone Number */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <input
+              type="tel"
+              name="phoneNumber"
+              value={editProfile.phoneNumber}
+              onChange={handleInputChange}
               disabled={savingEdit}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-              onClick={handleEditSave}
-              disabled={savingEdit}
-            >
-              {savingEdit ? 'Saving...' : 'Save'}
-            </button>
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className={`w-full border ${errors.phoneNumber ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
+            />
+            {errors.phoneNumber && <div className="text-xs text-red-500 mt-1">{errors.phoneNumber}</div>}
           </div>
+          {/* School */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">School</label>
+            <input
+              type="text"
+              name="school"
+              value={editProfile.school}
+              onChange={handleInputChange}
+              disabled={savingEdit}
+              className={`w-full border ${errors.school ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
+            />
+            {errors.school && <div className="text-xs text-red-500 mt-1">{errors.school}</div>}
+          </div>
+          {/* Grade Level */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
+            <input
+              type="text"
+              name="gradeLevel"
+              value={editProfile.gradeLevel}
+              onChange={handleInputChange}
+              disabled={savingEdit}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className={`w-full border ${errors.gradeLevel ? 'border-red-400' : 'border-gray-300'} rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100`}
+            />
+            {errors.gradeLevel && <div className="text-xs text-red-500 mt-1">{errors.gradeLevel}</div>}
+          </div>
+        </div>
+        {/* Sticky Action Buttons */}
+        <div className="flex justify-end gap-3 p-4 border-t bg-white sticky bottom-0 z-10">
+          <button
+            className="px-5 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+            onClick={handleEditCancel}
+            disabled={savingEdit}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            onClick={handleEditSave}
+            disabled={savingEdit || Object.keys(errors).length > 0 && Object.values(errors).some(Boolean)}
+          >
+            {savingEdit ? 'Saving...' : 'Save'}
+          </button>
         </div>
       </div>
     </div>

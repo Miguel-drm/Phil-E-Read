@@ -1,16 +1,16 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Routes, Route } from 'react-router-dom';
-import ProfileOverview from './ProfileOverview';
+import ProfileOverviewTeacher from './ProfileOverviewTeacher';
 
-const Profile: React.FC = () => {
+const TeacherProfile: React.FC = () => {
   useAuth();
 
   return (
     <Routes>
-      <Route index element={<ProfileOverview />} />
+      <Route index element={<ProfileOverviewTeacher />} />
     </Routes>
   );
 };
 
-export default Profile; 
+export default TeacherProfile; 

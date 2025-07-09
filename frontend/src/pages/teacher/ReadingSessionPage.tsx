@@ -7,6 +7,7 @@ import { ArrowLeftIcon, XCircleIcon, BookOpenIcon, UserGroupIcon, ClockIcon, Cha
 import * as pdfjsLib from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import 'pdfjs-dist/build/pdf.worker.entry';
+import Loader from '../../components/Loader';
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;

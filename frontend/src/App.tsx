@@ -8,6 +8,7 @@ import DashboardLayout from './components/layout/DashboardLayout';
 import StoriesManagement from './pages/admin/StoriesManagement';
 import Teachers from './pages/admin/Teachers';
 import Students from './pages/admin/Students';
+import Parents from './pages/admin/Parents';
 
 // Dashboard Pages
 import AdminDashboardPage from './pages/admin/AdminDashboard';
@@ -19,7 +20,6 @@ import MyChildrenPage from './pages/parent/MyChildren';
 import Reading from './pages/teacher/Reading';
 import ClassList from './pages/teacher/ClassList';
 import MakeTest from './pages/teacher/MakeTest';
-import Reports from './pages/teacher/Reports';
 import Profile from './pages/teacher/Profile';
 import ReadingSessionPage from './pages/teacher/ReadingSessionPage';
 
@@ -33,6 +33,9 @@ import ReportsPage from './pages/parent/Reports';
 import ParentProfilePage from './pages/parent/Profile';
 
 import SyncTeacherProfile from './components/SyncTeacherProfile';
+import AdminReports from './pages/admin/Reports';
+import TeacherReports from './pages/teacher/Reports';
+import AdminProfile from './pages/admin/Profile';
 
 const App: React.FC = () => {
   return (
@@ -58,6 +61,9 @@ const App: React.FC = () => {
                     <Route path="teachers" element={<Teachers />} />
                     <Route path="stories" element={<StoriesManagement />} />
                     <Route path="students" element={<Students />} />
+                    <Route path="parents" element={<Parents />} />
+                    <Route path="reports" element={<AdminReports />} />
+                    <Route path="profile" element={<AdminProfile />} />
                     {/* Add more admin routes here */}
                   </Routes>
                 </DashboardLayout>
@@ -76,7 +82,7 @@ const App: React.FC = () => {
                     <Route path="reading" element={<Reading />} />
                     <Route path="class-list" element={<ClassList />} />
                     <Route path="make-test" element={<MakeTest />} />
-                    <Route path="reports" element={<Reports />} />
+                    <Route path="reports" element={<TeacherReports />} />
                     <Route path="profile/*" element={<Profile />} />
                     <Route path="reading-session/:sessionId" element={<ReadingSessionPage />} />
                   </Routes>

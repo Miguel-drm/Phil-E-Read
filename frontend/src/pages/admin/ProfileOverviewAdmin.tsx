@@ -1,126 +1,36 @@
 import React, { useRef, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { EditProfileModalContext } from '../../components/layout/DashboardLayout';
+import { EditProfileModalContext, BannerContext } from '../../components/layout/DashboardLayout';
 import axios from 'axios';
 import Cropper from 'react-easy-crop';
-import { ArrowLeftIcon } from '@heroicons/react/24/solid';
 
-const bannerUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80'; // Placeholder banner
-
-// Helper to get cropped image as blob
-async function getCroppedImg(imageSrc: string, crop: any) {
-  const createImage = (url: string) =>
-    new Promise<HTMLImageElement>((resolve, reject) => {
-      const image = new window.Image();
-      image.addEventListener('load', () => resolve(image));
-      image.addEventListener('error', error => reject(error));
-      image.setAttribute('crossOrigin', 'anonymous');
-      image.src = url;
-    });
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('No 2d context');
-  canvas.width = crop.width;
-  canvas.height = crop.height;
-  ctx.drawImage(
-    image,
-    crop.x,
-    crop.y,
-    crop.width,
-    crop.height,
-    0,
-    0,
-    crop.width,
-    crop.height
-  );
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(blob => {
-      if (blob) resolve(blob);
-      else reject(new Error('Canvas is empty'));
-    }, 'image/png');
-  });
-}
-
-interface ProfileOverviewProps {
-  teacher?: {
-    displayName?: string;
-    email?: string;
-    phoneNumber?: string;
-    school?: string;
-    gradeLevel?: string;
-    profileImage?: string;
-    bio?: string;
-  };
-  adminView?: boolean;
-  onBack?: () => void;
-}
-
-const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = false, onBack }) => {
+const ProfileOverviewAdmin: React.FC = () => {
   const { userProfile } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { openEditProfileModal } = useContext(EditProfileModalContext);
+  const { banner } = useContext(BannerContext);
   const [activeTab, setActiveTab] = useState('Profile');
-  // Profile settings state
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('personal');
   const [profileData, setProfileData] = useState({
     displayName: userProfile?.displayName || '',
     email: userProfile?.email || '',
     phoneNumber: userProfile?.phoneNumber || '',
-    school: userProfile?.school || '',
-    gradeLevel: userProfile?.gradeLevel || '',
   });
-  // Settings tab state
-  const [settingsTab, setSettingsTab] = useState('personal');
   const [preferences, setPreferences] = useState({
-    notifications: {
-      email: true,
-      push: false,
-      sms: true
-    },
-    privacy: {
-      profileVisible: true,
-      showEmail: false,
-      showPhone: false
-    },
-    display: {
-      theme: 'light',
-      language: 'en',
-      timezone: 'America/New_York'
-    }
+    notifications: { email: true, push: false, sms: true },
   });
+  // Add state for security actions if not already present
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const { openEditProfileModal } = useContext(EditProfileModalContext);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { currentUser } = useAuth();
   const firebaseUid = currentUser?.uid;
   const [profileImage, setProfileImage] = useState<string | null>(null);
-
-  // Cropper modal state
   const [showCropModal, setShowCropModal] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
-
-  const tabs = adminView
-    ? ['Profile', 'Classes', 'Students', 'Assignments', 'Reports', 'Reading Sessions']
-    : ['Profile', 'Classes', 'Students', 'Assignments', 'Reports', 'Reading Sessions', 'Settings'];
-  // Use teacher prop if adminView, otherwise use userProfile
-  const profile = adminView && teacher ? teacher : userProfile;
-
-  React.useEffect(() => {
-    if (userProfile) {
-      setProfileData({
-        displayName: userProfile.displayName || '',
-        email: userProfile.email || '',
-        phoneNumber: userProfile.phoneNumber || '',
-        school: userProfile.school || '',
-        gradeLevel: userProfile.gradeLevel || '',
-      });
-    }
-  }, [userProfile]);
 
   useEffect(() => {
     async function fetchProfileImage() {
@@ -137,23 +47,12 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     fetchProfileImage();
   }, [firebaseUid]);
 
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      setIsEditing(false);
-    } catch (error) {
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleCameraClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
-  // Crop logic for main profile
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -165,18 +64,47 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     reader.readAsDataURL(file);
   };
 
-  // When crop is confirmed
   const handleCropConfirm = useCallback(async () => {
     if (!imageToCrop || !croppedAreaPixels || !firebaseUid || !userProfile) return;
     try {
-      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
-      // 1. Sync teacher document first
+      const createImage = (url: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new window.Image();
+          image.addEventListener('load', () => resolve(image));
+          image.addEventListener('error', error => reject(error));
+          image.setAttribute('crossOrigin', 'anonymous');
+          image.src = url;
+        });
+      const image = await createImage(imageToCrop);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No 2d context');
+      canvas.width = croppedAreaPixels.width;
+      canvas.height = croppedAreaPixels.height;
+      ctx.drawImage(
+        image,
+        croppedAreaPixels.x,
+        croppedAreaPixels.y,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height,
+        0,
+        0,
+        croppedAreaPixels.width,
+        croppedAreaPixels.height
+      );
+      const croppedBlob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas is empty'));
+        }, 'image/png');
+      });
+      // 1. Sync admin document (reuse teacher endpoint for now)
       await fetch('/api/teachers/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firebaseUid,
-          name: userProfile.displayName || 'Teacher',
+          name: userProfile.displayName || 'Admin',
           email: userProfile.email || ''
         })
       });
@@ -209,6 +137,12 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
+  // Handler for updating preferences
+  const handleUpdatePreferences = () => {
+    // showSuccess('Preferences Updated', 'Your preferences have been saved successfully!');
+  };
+
+  // Handler for changing password
   const handleChangePassword = async () => {
     if (!userProfile || !userProfile.email) return;
     const result = window.confirm(`Send password reset email to ${userProfile.email}?`);
@@ -225,10 +159,7 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     }
   };
 
-  const handleUpdatePreferences = () => {
-    // showSuccess('Preferences Updated', 'Your preferences have been saved successfully!');
-  };
-
+  // Handler for exporting data
   const handleExportData = async () => {
     setIsExportingData(true);
     try {
@@ -241,13 +172,13 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     }
   };
 
+  // Handler for deleting account
   const handleDeleteAccount = async () => {
     if (!userProfile) return;
     const confirmResult = window.confirm('This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?');
     if (confirmResult) {
       setIsDeletingAccount(true);
       try {
-        // Simulate deletion
         await new Promise(resolve => setTimeout(resolve, 2000));
         // showSuccess('Account Deleted', 'Your account and all associated data have been permanently deleted.');
       } catch (error) {
@@ -258,118 +189,83 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
     }
   };
 
-  // Helper to get profile image
-  const getProfileImage = () => {
-    if (adminView && teacher) return teacher.profileImage;
-    if (!adminView && profileImage) return profileImage;
-    return undefined;
-  };
-
-  if (!firebaseUid) return <div>Loading...</div>;
+  const tabs = ['Profile', 'Users', 'System Settings', 'Reports', 'Settings'];
 
   return (
     <div className="w-full min-h-screen bg-gray-50">
-      {/* Banner with only top corners rounded */}
       <div className="relative w-full h-48 md:h-64 bg-gray-200 rounded-t-2xl overflow-hidden">
-        <img
-          src={bannerUrl}
-          alt="Profile Banner"
-          className="object-cover w-full h-full rounded-t-2xl"
-        />
-        {adminView && onBack && (
-          <button
-            className="absolute left-6 top-6 bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-full shadow flex items-center justify-center"
-            onClick={onBack}
-            title="Back to List"
-          >
-            <ArrowLeftIcon className="w-6 h-6" />
-          </button>
-        )}
+        <img src={banner} alt="Profile Banner" className="object-cover w-full h-full rounded-t-2xl" />
       </div>
-      {/* Profile Header Row: Avatar, Name, Actions */}
       <div className="relative max-w-5xl mx-auto flex items-end px-4 -mt-20 md:-mt-24">
-        {/* Avatar and Name+Button in relative container */}
         <div className="relative flex items-end" style={{ minHeight: '160px' }}>
-          {/* Avatar with camera icon */}
           <div className="relative z-10">
             <div className="w-40 h-40 md:w-48 md:h-48 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-white overflow-hidden relative">
-              {getProfileImage() ? (
+              {profileImage ? (
                 <img
-                  src={getProfileImage()}
+                  src={profileImage}
                   alt="Profile"
                   className="object-cover w-full h-full rounded-full z-10"
                   style={{ position: 'relative', zIndex: 10 }}
                 />
               ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="w-24 h-24"
-                  viewBox="0 0 24 24"
-                  fill="#cfd8dc"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" viewBox="0 0 24 24" fill="#cfd8dc">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M4 20c0-2.21 3.58-4 8-4s8 1.79 8 4v1H4v-1z" />
                 </svg>
               )}
             </div>
-            {/* Camera Icon Overlay (hide in adminView) */}
-            {!adminView && (
-              <>
-                <button
-                  className="absolute -bottom-0 -right-0 bg-gray-100 rounded-full p-2 shadow-md border border-gray-200 hover:bg-gray-200 transition-colors"
-                  style={{ zIndex: 999 }}
-                  title="Change profile photo"
-                  aria-label="Change profile photo"
-                  onClick={handleCameraClick}
-                  type="button"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-gray-700">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 19.5V6.75A2.25 2.25 0 014.5 4.5h3.379c.414 0 .789.252.937.64l.574 1.53a.75.75 0 00.7.48h4.38a.75.75 0 00.7-.48l.574-1.53a1 1 0 01.937-.64H19.5a2.25 2.25 0 012.25 2.25v12.75a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 19.5z" />
-                    <circle cx="12" cy="13" r="3.25" />
-                  </svg>
-                </button>
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </>
-            )}
-          </div>
-          {/* Cropper Modal (hide in adminView) */}
-          {!adminView && showCropModal && (
-            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60">
-              <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-4xl relative flex flex-col items-center">
-                <h3 className="text-lg font-semibold mb-4">Crop Image</h3>
-                <div className="relative w-[600px] h-[600px] bg-gray-100">
-                  <Cropper
-                    image={imageToCrop!}
-                    crop={crop}
-                    zoom={zoom}
-                    aspect={1}
-                    onCropChange={setCrop}
-                    onZoomChange={setZoom}
-                    onCropComplete={onCropComplete}
-                  />
-                </div>
-                <div className="flex gap-3 mt-4">
-                  <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300" onClick={handleCropCancel}>Cancel</button>
-                  <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={handleCropConfirm}>Crop</button>
+            {/* Camera Icon Overlay */}
+            <>
+              <button
+                className="absolute -bottom-0 -right-0 bg-gray-100 rounded-full p-2 shadow-md border border-gray-200 hover:bg-gray-200 transition-colors"
+                style={{ zIndex: 999 }}
+                title="Change profile photo"
+                aria-label="Change profile photo"
+                onClick={handleCameraClick}
+                type="button"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-gray-700">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 19.5V6.75A2.25 2.25 0 014.5 4.5h3.379c.414 0 .789.252.937.64l.574 1.53a.75.75 0 00.7.48h4.38a.75.75 0 00.7-.48l.574-1.53a1 1 0 01.937-.64H19.5a2.25 2.25 0 012.25 2.25v12.75a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 19.5z" />
+                  <circle cx="12" cy="13" r="3.25" />
+                </svg>
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </>
+            {/* Cropper Modal */}
+            {showCropModal && (
+              <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-60">
+                <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-4xl relative flex flex-col items-center">
+                  <h3 className="text-lg font-semibold mb-4">Crop Image</h3>
+                  <div className="relative w-[600px] h-[600px] bg-gray-100">
+                    <Cropper
+                      image={imageToCrop!}
+                      crop={crop}
+                      zoom={zoom}
+                      aspect={1}
+                      onCropChange={setCrop}
+                      onZoomChange={setZoom}
+                      onCropComplete={onCropComplete}
+                    />
+                  </div>
+                  <div className="flex gap-3 mt-4">
+                    <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300" onClick={handleCropCancel}>Cancel</button>
+                    <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={handleCropConfirm}>Crop</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-        {/* Name, role, and Edit Profile button inline */}
-        <div className="flex flex-col justify-end ml-6 pb-4 flex-1">
-          <div className="flex items-center">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight mb-0">
-              {profile?.displayName || '-'}
-            </h2>
-            {/* Edit Profile button (hide in adminView) */}
-            {!adminView && (
+            )}
+          </div>
+          <div className="flex flex-col justify-end ml-6 pb-4 flex-1">
+            <div className="flex items-center">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight mb-0">
+                {userProfile?.displayName || '-'}
+              </h2>
               <button
                 onClick={openEditProfileModal}
                 className="ml-60 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow transition-colors text-base font-semibold"
@@ -380,12 +276,13 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
                 </svg>
                 Edit Profile
               </button>
-            )}
+            </div>
+            <span className="text-base text-gray-500 font-medium mt-0">
+              {userProfile?.role ? userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1) : '-'}
+            </span>
           </div>
-          <span className="text-base text-gray-500 font-medium mt-0">Teacher</span>
         </div>
       </div>
-      {/* Tabs Row */}
       <div className="max-w-5xl mx-auto mt-8 px-4">
         <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
           {tabs.map(tab => (
@@ -399,115 +296,70 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
           ))}
         </div>
       </div>
-      {/* Profile Summary Card or Settings Form */}
       <div className="w-full max-w-5xl mx-auto mt-8 px-4">
-        {activeTab === 'Settings' && !adminView ? (
+        {activeTab === 'Profile' && (
           <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 flex flex-col gap-8 border border-blue-100">
-            {/* Settings Tabs */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="-mb-px flex space-x-8">
-                <button
-                  onClick={() => setSettingsTab('personal')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${settingsTab === 'personal' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Personal Information
-                </button>
-                <button
-                  onClick={() => setSettingsTab('preferences')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${settingsTab === 'preferences' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Preferences
-                </button>
-                <button
-                  onClick={() => setSettingsTab('security')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${settingsTab === 'security' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Security
-                </button>
-              </nav>
-            </div>
-            {/* Settings Tab Content */}
-            {settingsTab === 'personal' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
-                    <input
-                      type="text"
-                      value={profileData.displayName}
-                      onChange={e => setProfileData({ ...profileData, displayName: e.target.value })}
-                      disabled={!isEditing}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                    <input
-                      type="email"
-                      value={profileData.email}
-                      disabled
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-500"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                    <input
-                      type="tel"
-                      value={profileData.phoneNumber}
-                      onChange={e => setProfileData({ ...profileData, phoneNumber: e.target.value })}
-                      disabled={!isEditing}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">School</label>
-                    <input
-                      type="text"
-                      value={profileData.school}
-                      onChange={e => setProfileData({ ...profileData, school: e.target.value })}
-                      disabled={!isEditing}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Grade Level</label>
-                    <input
-                      type="text"
-                      value={profileData.gradeLevel}
-                      onChange={e => setProfileData({ ...profileData, gradeLevel: e.target.value })}
-                      disabled={!isEditing}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-4 mt-8">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={() => setIsEditing(false)}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSaveProfile}
-                        disabled={isSaving}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {isSaving ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Edit Profile
-                    </button>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Name</label>
+                <div className="text-lg font-bold text-gray-900">{userProfile?.displayName || '-'}</div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Email</label>
+                <div className="text-lg font-bold text-gray-900">{userProfile?.email || '-'}</div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Role</label>
+                <div className="text-lg font-bold text-gray-900">Admin</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'Users' && (
+          <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 border border-blue-100">
+            <div className="text-lg font-semibold text-gray-800 mb-2">User Management</div>
+            <div className="text-gray-600">Manage teachers, parents, and students from the Users section in the sidebar.</div>
+          </div>
+        )}
+        {activeTab === 'System Settings' && (
+          <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 border border-blue-100">
+            <div className="text-lg font-semibold text-gray-800 mb-2">System Settings</div>
+            <div className="text-gray-600">Configure system-wide settings from the sidebar or contact your developer for advanced options.</div>
+          </div>
+        )}
+        {activeTab === 'Reports' && (
+          <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 border border-blue-100">
+            <div className="text-lg font-semibold text-gray-800 mb-2">Reports</div>
+            <div className="text-gray-600">Access and generate reports from the Reports section in the sidebar.</div>
+          </div>
+        )}
+        {activeTab === 'Settings' && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
+            <div className="flex border-b mb-6">
+              <button className={`px-4 py-2 font-medium focus:outline-none ${settingsTab === 'personal' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setSettingsTab('personal')}>Personal Information</button>
+              <button className={`px-4 py-2 font-medium focus:outline-none ml-4 ${settingsTab === 'preferences' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setSettingsTab('preferences')}>Preferences</button>
+              <button className={`px-4 py-2 font-medium focus:outline-none ml-4 ${settingsTab === 'security' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setSettingsTab('security')}>Security</button>
+            </div>
+            {settingsTab === 'personal' && (
+              <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                  <input type="text" className="w-full border rounded-lg px-3 py-2" value={profileData.displayName} readOnly />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input type="email" className="w-full border rounded-lg px-3 py-2 bg-gray-100" value={profileData.email} readOnly />
+                  <span className="text-xs text-gray-400">Email cannot be changed</span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input type="text" className="w-full border rounded-lg px-3 py-2" value={profileData.phoneNumber} readOnly />
+                </div>
+                {/* Add more admin-specific fields here if needed */}
+                <div className="col-span-2">
+                  <button type="button" className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg">Edit Profile</button>
+                </div>
+              </form>
             )}
             {settingsTab === 'preferences' && (
               <div className="space-y-6">
@@ -629,36 +481,10 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({ teacher, adminView = 
               </div>
             )}
           </div>
-        ) : (
-          activeTab === 'Profile' && (
-            <>
-              <div className="bg-white rounded-3xl shadow-2xl p-10 md:p-14 flex flex-col gap-8 border border-blue-100">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
-                    <div className="text-lg font-bold text-gray-900">{profile?.phoneNumber || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">School</label>
-                    <div className="text-lg font-bold text-gray-900">{profile?.school || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Grade Level</label>
-                    <div className="text-lg font-bold text-gray-900">{profile?.gradeLevel || '-'}</div>
-                  </div>
-                </div>
-              </div>
-              {profile?.bio && (
-                <div className="bg-white rounded-3xl shadow-2xl p-8 mt-6 border border-blue-100">
-                  <div className="text-base text-gray-700 whitespace-pre-line">{profile.bio}</div>
-                </div>
-              )}
-            </>
-          )
         )}
       </div>
     </div>
   );
 };
 
-export default ProfileOverview; 
+export default ProfileOverviewAdmin; 

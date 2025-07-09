@@ -39,6 +39,7 @@ export interface UserProfile {
   notes?: string;
   isProfileComplete?: boolean;
   bio?: string;
+  banner?: string;
 }
 
 // Function to determine user role based on email domain
@@ -149,6 +150,7 @@ export const isProfileComplete = (profile: UserProfile): boolean => {
 export const updateUserProfile = async (updates: UserProfile): Promise<void> => {
   try {
     if (auth.currentUser) {
+      console.log('updateUserProfile called with:', updates);
       const authUpdates: { displayName?: string, photoURL?: string } = {};
       if (updates.displayName !== undefined) {
         authUpdates.displayName = updates.displayName;
@@ -166,11 +168,14 @@ export const updateUserProfile = async (updates: UserProfile): Promise<void> => 
       const isComplete = isProfileComplete(updatedProfile);
       
       // Update user document in Firestore with completion status and other fields
-      await setDoc(doc(db, 'users', auth.currentUser.uid), {
-        ...updates,
-        isProfileComplete: isComplete,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      const cleanedUpdates = Object.fromEntries(
+        Object.entries({
+          ...updates,
+          isProfileComplete: isComplete,
+          updatedAt: new Date().toISOString()
+        }).filter(([_, v]) => v !== undefined)
+      );
+      await setDoc(doc(db, 'users', auth.currentUser.uid), cleanedUpdates, { merge: true });
     } else {
       throw new Error('No user is currently signed in');
     }
@@ -187,6 +192,7 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
   try {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     const userData = userDoc.data();
+    console.log('Loaded user profile from Firestore:', userData);
     
     if (!userData) {
       // If no user document exists, create one with default role
@@ -222,6 +228,7 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
       gradeLevel: String(userData.gradeLevel || ''),
       school: String(userData.school || ''),
       isProfileComplete: Boolean(userData.isProfileComplete || false),
+      banner: userData.banner || undefined,
     };
   } catch (error) {
     console.error('Error fetching user profile:', error);
@@ -267,6 +274,12 @@ export const deleteTeacher = async (teacherId: string) => {
   await deleteDoc(doc(db, 'users', teacherId));
 };
 
+// Delete a parent by ID (admin only)
+export const deleteParent = async (parentId: string) => {
+  if (!parentId) throw new Error('No parent ID provided');
+  await deleteDoc(doc(db, 'users', parentId));
+};
+
 // Helper to get count of users by role
 const getUsersCountByRole = async (role?: UserRole): Promise<number> => {
   let usersQuery = query(collection(db, 'users'));
@@ -296,5 +309,22 @@ export const getParentsCount = async (): Promise<number> => {
 export const getAllParents = async () => {
   const q = query(collection(db, 'users'), where('role', '==', 'parent'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  // Fetch all students once for efficiency
+  const studentsSnapshot = await getDocs(collection(db, 'students'));
+  const allStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  return snapshot.docs.map(doc => {
+    const parentId = doc.id;
+    const linkedStudents = allStudents.filter(s => (s as any).parentId === parentId);
+    return {
+      id: parentId,
+      ...doc.data(),
+      children: linkedStudents.map(s => ({
+        name: (s as any).name,
+        email: (s as any).email,
+        id: s.id,
+      })),
+    };
+  });
 }; 
