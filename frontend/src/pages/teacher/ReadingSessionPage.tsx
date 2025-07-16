@@ -16,6 +16,7 @@ import {
   formatElapsedTime
 } from '@/utils/readingMetrics';
 import { studentService, type Student } from '@/services/studentService';
+import Swal from 'sweetalert2';
 
 // Initialize PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -795,8 +796,13 @@ const ReadingSessionPage: React.FC = () => {
         status: 'completed'
       });
 
-      // Show success message
-      alert('Session completed successfully! All data has been saved.');
+      // Show SweetAlert2 success popup
+      await Swal.fire({
+        icon: 'success',
+        title: 'Session Completed!',
+        text: 'All data has been saved successfully.',
+        confirmButtonText: 'OK',
+      });
       
       // Optionally navigate back to sessions list
       // navigate('/teacher/reading');
