@@ -35,6 +35,7 @@ export interface UserProfile {
   alternateEmail?: string;
   nationality?: string;
   profilePhoto?: string;
+  profileImage?: string; // <-- Add this line for parent/teacher avatars
   languagesSpoken?: string;
   notes?: string;
   isProfileComplete?: boolean;
@@ -188,11 +189,33 @@ export const updateUserProfile = async (updates: UserProfile): Promise<void> => 
 export const getUserProfile = async (): Promise<UserProfile | null> => {
   const user = auth.currentUser;
   if (!user) return null;
-  
+
   try {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     const userData = userDoc.data();
-    console.log('Loaded user profile from Firestore:', userData);
+    let backendProfileImage: string | undefined = undefined;
+    // Fetch backend profile image for teacher, admin, or parent
+    if (userData?.role === 'teacher' || userData?.role === 'admin') {
+      try {
+        const res = await fetch(`/api/teachers/${user.uid}/profile-image`);
+        const data = await res.json();
+        if (data && data.profileImage) {
+          backendProfileImage = data.profileImage.startsWith('data:image')
+            ? data.profileImage
+            : `data:image/png;base64,${data.profileImage}`;
+        }
+      } catch {}
+    } else if (userData?.role === 'parent') {
+      try {
+        const res = await fetch(`/api/parents/${user.uid}/profile-image`);
+        const data = await res.json();
+        if (data && data.profileImage) {
+          backendProfileImage = data.profileImage.startsWith('data:image')
+            ? data.profileImage
+            : `data:image/png;base64,${data.profileImage}`;
+        }
+      } catch {}
+    }
     
     if (!userData) {
       // If no user document exists, create one with default role
@@ -220,15 +243,16 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
     }
     
     return {
-      displayName: user.displayName || userData.displayName || undefined,
+      displayName: user.displayName || userData?.displayName || undefined,
       email: user.email || undefined,
       photoURL: user.photoURL || undefined,
-      role: userData.role || determineUserRole(user.email || ''),
-      phoneNumber: String(userData.phoneNumber || ''),
-      gradeLevel: String(userData.gradeLevel || ''),
-      school: String(userData.school || ''),
-      isProfileComplete: Boolean(userData.isProfileComplete || false),
-      banner: userData.banner || undefined,
+      role: userData?.role || determineUserRole(user.email || ''),
+      phoneNumber: String(userData?.phoneNumber || ''),
+      gradeLevel: String(userData?.gradeLevel || ''),
+      school: String(userData?.school || ''),
+      isProfileComplete: Boolean(userData?.isProfileComplete || false),
+      banner: userData?.banner || undefined,
+      profileImage: backendProfileImage,
     };
   } catch (error) {
     console.error('Error fetching user profile:', error);
@@ -249,12 +273,11 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
 };
 
 // Fetch all teachers (optionally filtered by school if school info is present)
-export const getAllTeachers = async (schoolId?: string) => {
-  const q = schoolId
-    ? query(collection(db, 'users'), where('role', '==', 'teacher'), where('schoolId', '==', schoolId))
-    : query(collection(db, 'users'), where('role', '==', 'teacher'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+export const getAllTeachers = async () => {
+  // Fetch all teachers from the backend API to include profile images
+  const res = await fetch('/api/teachers');
+  if (!res.ok) throw new Error('Failed to fetch teachers');
+  return await res.json();
 };
 
 // Update any teacher's profile by ID (admin only)
@@ -266,6 +289,25 @@ export const updateTeacherProfile = async (teacherId: string, updates: {
 }) => {
   if (!teacherId) throw new Error('No teacher ID provided');
   await updateDoc(doc(db, 'users', teacherId), updates);
+};
+
+// Update a parent's profile by ID (admin only)
+export const updateParentProfile = async (parentId: string, updates: {
+  displayName?: string;
+  phoneNumber?: string | null;
+  address?: string | null;
+}) => {
+  try {
+    const cleanedUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await updateDoc(doc(db, 'users', parentId), {
+      ...cleanedUpdates,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Delete a teacher by ID (admin only)
@@ -307,24 +349,21 @@ export const getParentsCount = async (): Promise<number> => {
 
 // Fetch all parents
 export const getAllParents = async () => {
-  const q = query(collection(db, 'users'), where('role', '==', 'parent'));
-  const snapshot = await getDocs(q);
+  const res = await fetch('/api/parents');
+  if (!res.ok) throw new Error('Failed to fetch parents');
+  return await res.json();
+};
 
-  // Fetch all students once for efficiency
-  const studentsSnapshot = await getDocs(collection(db, 'students'));
-  const allStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-  return snapshot.docs.map(doc => {
-    const parentId = doc.id;
-    const linkedStudents = allStudents.filter(s => (s as any).parentId === parentId);
-    return {
-      id: parentId,
-      ...doc.data(),
-      children: linkedStudents.map(s => ({
-        name: (s as any).name,
-        email: (s as any).email,
-        id: s.id,
-      })),
-    };
-  });
+// Fetch a single teacher's full profile by ID
+export const getTeacherProfileById = async (teacherId: string) => {
+  const res = await fetch(`/api/teachers/${teacherId}`);
+  if (!res.ok) throw new Error('Failed to fetch teacher profile');
+  return await res.json();
 }; 
+
+// Fetch a single parent's full profile by ID
+export const getParentProfileById = async (parentId: string) => {
+  const res = await fetch(`/api/parents/${parentId}`);
+  if (!res.ok) throw new Error('Failed to fetch parent profile');
+  return await res.json();
+};

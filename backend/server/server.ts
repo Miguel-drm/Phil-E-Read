@@ -10,6 +10,7 @@ import mongoose from 'mongoose';
 import Story, { IStory } from './models/Story.js';
 import GridFSService from './services/gridfsService.js';
 import teacherRoutes from './routes/teacherRoutes.js';
+import parentRoutes from './routes/parentRoutes';
 
 dotenv.config();
 
@@ -463,6 +464,7 @@ app.use(express.json());
     });
 
     app.use('/api/teachers', teacherRoutes);
+    app.use('/api/parents', parentRoutes);
 
   } catch (error) {
     console.error('Failed to connect to MongoDB or initialize GridFS:', error);

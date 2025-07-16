@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-const SyncTeacherProfile = () => {
+const SyncParentProfile = () => {
   const { currentUser, userProfile } = useAuth();
 
   useEffect(() => {
-    if (currentUser && userProfile) {
-      fetch('http://localhost:5000/api/teachers/sync', {
+    if (currentUser && userProfile && userProfile.role === 'parent') {
+      fetch('http://localhost:5000/api/parents/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -14,9 +14,9 @@ const SyncTeacherProfile = () => {
           name: userProfile.displayName || '',
           email: userProfile.email || '',
           displayName: userProfile.displayName || '',
-          school: userProfile.school || '',
-          gradeLevel: userProfile.gradeLevel || '',
-          phoneNumber: userProfile.phoneNumber || ''
+          address: userProfile.address || '',
+          phoneNumber: userProfile.phoneNumber || '',
+          profileImage: userProfile.profilePhoto || ''
         }),
       });
     }
@@ -25,4 +25,4 @@ const SyncTeacherProfile = () => {
   return null;
 };
 
-export default SyncTeacherProfile; 
+export default SyncParentProfile;

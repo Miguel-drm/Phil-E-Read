@@ -32,7 +32,6 @@ import AssignmentsPage from './pages/parent/Assignments';
 import ReportsPage from './pages/parent/Reports';
 import ParentProfilePage from './pages/parent/Profile';
 
-import SyncTeacherProfile from './components/SyncTeacherProfile';
 import AdminReports from './pages/admin/Reports';
 import TeacherReports from './pages/teacher/Reports';
 import AdminProfile from './pages/admin/Profile';
@@ -41,7 +40,6 @@ const App: React.FC = () => {
   return (
     <Router>
       <AuthProvider>
-        <SyncTeacherProfile />
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<AuthWrapper />} />
@@ -63,7 +61,7 @@ const App: React.FC = () => {
                     <Route path="students" element={<Students />} />
                     <Route path="parents" element={<Parents />} />
                     <Route path="reports" element={<AdminReports />} />
-                    <Route path="profile" element={<AdminProfile />} />
+                    <Route path="profile/*" element={<AdminProfile />} />
                     {/* Add more admin routes here */}
                   </Routes>
                 </DashboardLayout>

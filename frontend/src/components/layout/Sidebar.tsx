@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarClasses = `
-    fixed top-0 left-0 z-[9999] h-screen
+    fixed top-0 left-0 z-10 h-screen
     transition-all duration-300 ease-in-out overflow-x-hidden
     ${isMobile
       ? `w-full max-w-xs shadow-2xl ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
@@ -185,4 +185,4 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-export default Sidebar; 
+export default Sidebar;

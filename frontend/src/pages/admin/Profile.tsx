@@ -8,7 +8,7 @@ const AdminProfile: React.FC = () => {
 
   return (
     <Routes>
-      <Route index element={<ProfileOverviewAdmin />} />
+      <Route path="*" element={<ProfileOverviewAdmin />} />
     </Routes>
   );
 };

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getAllTeachers, deleteTeacher } from '../../services/authService';
+import { getAllTeachers, deleteTeacher, getTeacherProfileById } from '../../services/authService';
 import EditTeacherDetailsModal from '../../components/admin/EditTeacherDetailsModal';
 import { Menu } from '@headlessui/react';
 import { EllipsisVerticalIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid';
 import ConfirmDeleteModal from '../../components/admin/ConfirmDeleteModal';
 import Loader from '../../components/Loader';
+import ProfileOverviewTeacher from '../teacher/ProfileOverviewTeacher';
 
 interface Teacher {
   id: string;
@@ -26,6 +27,7 @@ const Teachers: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
   const [viewTeacher, setViewTeacher] = useState<Teacher | null>(null);
+  const [viewTeacherLoading, setViewTeacherLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterType, setFilterType] = useState<'az' | 'za' | 'newest' | 'oldest'>('az');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -106,41 +108,24 @@ const Teachers: React.FC = () => {
     displayedTeachers.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
   }
 
+  const handleViewTeacher = async (teacher: Teacher) => {
+    setViewTeacherLoading(true);
+    try {
+      const fullProfile = await getTeacherProfileById(teacher.id);
+      setViewTeacher(fullProfile);
+    } catch (e) {
+      setViewTeacher(teacher); // fallback
+    } finally {
+      setViewTeacherLoading(false);
+    }
+  };
+
   return (
     <div className="p-8">
-      {viewTeacher ? (
-        <div className="bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12)] p-2 sm:p-6">
-          <div className="flex justify-between mb-4 items-center">
-            <h2 className="text-2xl font-bold text-gray-800">Teacher Details</h2>
-            <button
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-full shadow flex items-center justify-center"
-              onClick={() => setViewTeacher(null)}
-              title="Back"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
-              <p><span className="font-medium text-gray-900">Name:</span> {viewTeacher.displayName || 'N/A'}</p>
-              <p><span className="font-medium text-gray-900">Email:</span> {viewTeacher.email || 'N/A'}</p>
-              <p><span className="font-medium text-gray-900">Phone:</span> {viewTeacher.phoneNumber || 'N/A'}</p>
-              <p><span className="font-medium text-gray-900">School:</span> {viewTeacher.school || 'N/A'}</p>
-              <p><span className="font-medium text-gray-900">Grade Level:</span> {viewTeacher.gradeLevel || 'N/A'}</p>
-            </div>
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Profile Image</h3>
-              {viewTeacher.profileImage ? (
-                <img src={viewTeacher.profileImage} alt={viewTeacher.displayName || 'Profile'} className="w-full h-40 object-cover rounded-lg" />
-              ) : (
-                <div className="w-full h-40 bg-gray-200 flex items-center justify-center rounded-lg text-gray-500">No Image</div>
-              )}
-            </div>
-          </div>
-        </div>
+      {viewTeacherLoading ? (
+        <Loader label="Loading profile..." />
+      ) : viewTeacher ? (
+        <ProfileOverviewTeacher teacher={viewTeacher} readOnly onBack={() => setViewTeacher(null)} />
       ) : loading ? (
         <Loader label="Loading teachers..." />
       ) : error ? (
@@ -220,14 +205,14 @@ const Teachers: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {displayedTeachers.map((teacher) => (
+                {displayedTeachers.map(teacher => (
                   <tr
                     key={teacher.id}
-                    className="transition-all duration-200 hover:bg-blue-200/70 hover:shadow-2xl hover:-translate-y-1 hover:border-blue-400 border-b border-gray-100 last:border-b-0 group"
+                    className="cursor-pointer hover:bg-blue-50 transition"
+                    onClick={() => handleViewTeacher(teacher)}
                   >
                     <td
-                      className="px-6 py-6 whitespace-nowrap flex items-center gap-4 cursor-pointer"
-                      onClick={() => setViewTeacher(teacher)}
+                      className="px-6 py-6 whitespace-nowrap flex items-center gap-4"
                     >
                       <span className="w-16 h-16 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center overflow-hidden mr-2">
                         {teacher.profileImage ? (
@@ -239,8 +224,8 @@ const Teachers: React.FC = () => {
                         <span className="text-xs text-gray-400">{teacher.email || 'N/A'}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-700 align-middle cursor-pointer" onClick={() => setViewTeacher(teacher)}>{teacher.school || 'N/A'}</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-700 text-center align-middle cursor-pointer" onClick={() => setViewTeacher(teacher)}>{teacher.gradeLevel || 'N/A'}</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-700">{teacher.school || 'N/A'}</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-700 text-center">{teacher.gradeLevel || 'N/A'}</td>
                     <td className="px-6 py-6 whitespace-nowrap text-right text-sm font-medium relative align-middle">
                       <Menu as="div" className="relative inline-block text-left">
                         <Menu.Button className="flex items-center p-2 rounded-full hover:bg-gray-100 focus:outline-none">

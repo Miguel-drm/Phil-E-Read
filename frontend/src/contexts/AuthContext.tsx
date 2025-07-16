@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import { onAuthStateChange, signIn, signUp, signOutUser, resetPassword, getUserProfile, isProfileComplete } from '../services/authService';
 import type { UserProfile, UserRole } from '../services/authService';
 
-interface AuthContextType {
+export interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   userRole: UserRole | null;
@@ -16,7 +16,7 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
