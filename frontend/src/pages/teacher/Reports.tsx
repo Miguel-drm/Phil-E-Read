@@ -591,16 +591,44 @@ const Reports: React.FC<{ setIsHeaderDarkened?: (v: boolean) => void }> = ({ set
                           {result.book ? (<div className="mb-1"><span className="font-semibold">Story:</span> {result.book}</div>) : null}
                           <div className="mb-1"><span className="font-semibold">Words:</span> <span className="text-lg font-bold">{result.wordsRead ?? '-'}</span></div>
                           <div className="mb-1"><span className="font-semibold">Miscues:</span> <span className="text-lg font-bold">{result.miscues ?? '-'}</span></div>
-                          <div className="mb-1"><span className="font-semibold">Score:</span> <span className="text-lg font-bold">{result.oralReadingScore ?? '-'}</span></div>
+                          <div className="mb-1"><span className="font-semibold">Score:</span> <span className="text-lg font-bold">{result.oralReadingScore ?? '-'}{(result.oralReadingScore !== undefined && result.oralReadingScore !== null && result.oralReadingScore !== '-') ? '%' : ''}</span></div>
                           <div className="mb-1"><span className="font-semibold">Speed:</span> <span className="text-lg font-bold">{result.readingSpeed ?? '-'} wpm</span></div>
+                          {/* Level based on oralReadingScore for reading results only */}
+                          {modalType === 'reading' && (typeof result.oralReadingScore === 'number' || (typeof result.oralReadingScore === 'string' && result.oralReadingScore !== undefined)) ? (
+                            <div className="mb-1">
+                              <span className="font-semibold">Level:</span> <span className="text-lg font-bold">
+                                {(() => {
+                                  const score = typeof result.oralReadingScore === 'string' ? parseFloat(result.oralReadingScore) : result.oralReadingScore;
+                                  if (isNaN(score)) return '-';
+                                  if (score >= 95) return 'Independent';
+                                  if (score >= 90) return 'Instructional';
+                                  return 'Frustrational';
+                                })()}
+                              </span>
+                            </div>
+                          ) : null}
                         </>
                       ) : (
                         <>
                           {result.testName ? (<div className="mb-1"><span className="font-semibold">Test:</span> {result.testName}</div>) : null}
                           <div className="mb-1"><span className="font-semibold">Score:</span> <span className="text-lg font-bold">{result.score ?? '-'}</span></div>
-                          <div className="mb-1"><span className="font-semibold">Comprehension:</span> <span className="text-lg font-bold">{result.comprehension ?? '-'}</span></div>
+                          <div className="mb-1"><span className="font-semibold">Comprehension:</span> <span className="text-lg font-bold">{result.comprehension ?? '-'}{(result.comprehension !== undefined && result.comprehension !== null && result.comprehension !== '-') ? '%' : ''}</span></div>
                           <div className="mb-1"><span className="font-semibold">Questions:</span> <span className="text-lg font-bold">{result.totalQuestions ?? '-'}</span></div>
                           <div className="mb-1"><span className="font-semibold">Correct:</span> <span className="text-lg font-bold">{result.correctAnswers ?? '-'}</span></div>
+                          {/* Level based on comprehension for test results only */}
+                          {modalType === 'test' && (typeof result.comprehension === 'number' || (typeof result.comprehension === 'string' && result.comprehension !== undefined)) ? (
+                            <div className="mb-1">
+                              <span className="font-semibold">Level:</span> <span className="text-lg font-bold">
+                                {(() => {
+                                  const score = typeof result.comprehension === 'string' ? parseFloat(result.comprehension) : result.comprehension;
+                                  if (isNaN(score)) return '-';
+                                  if (score >= 80) return 'Independent';
+                                  if (score >= 59) return 'Instructional';
+                                  return 'Frustrational';
+                                })()}
+                              </span>
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </div>
